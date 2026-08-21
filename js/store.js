@@ -19,6 +19,17 @@
 
   function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
+  /* při prvním spuštění se přizpůsobíme nastavení prohlížeče */
+  function prefersDark() {
+    try {
+      var stamped = document.documentElement.getAttribute('data-theme');
+      if (stamped === 'dark') return true;
+      if (stamped === 'light') return false;
+      return !!(global.matchMedia &&
+        global.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { return false; }
+  }
+
   var Store = {
     state: null,
     undoStack: [],
@@ -33,7 +44,7 @@
         version: 1,
         activeTreeId: null,
         settings: {
-          theme: 'pergamen',       // pergamen | inkoust
+          theme: prefersDark() ? 'inkoust' : 'pergamen',   // pergamen | inkoust
           collateral: 'siblings',  // none | siblings | all
           showPartners: true,
           showYears: true,

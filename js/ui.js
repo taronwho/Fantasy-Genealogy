@@ -47,8 +47,22 @@
       (ICONS[name] || '') + '</svg>';
   }
 
+  /* název souboru bez diakritiky — prohlížeče s ní zacházejí různě */
+  var DIA = {
+    'á':'a','č':'c','ď':'d','é':'e','ě':'e','í':'i','ň':'n','ó':'o','ř':'r',
+    'š':'s','ť':'t','ú':'u','ů':'u','ý':'y','ž':'z','ä':'a','ö':'o','ü':'u',
+    'ĺ':'l','ľ':'l','ŕ':'r','ô':'o'
+  };
+  function asciiSlug(text, fallback) {
+    var out = (text || '').toLowerCase().replace(/[^a-z0-9]/g, function (ch) {
+      return DIA[ch] !== undefined ? DIA[ch] : '-';
+    });
+    out = out.replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return out || fallback || 'rodokmen';
+  }
+
   var UI = {
-    h: h, icon: icon, ICONS: ICONS,
+    h: h, icon: icon, ICONS: ICONS, asciiSlug: asciiSlug,
     onRefresh: function () {},
 
     /* ---------- drobnosti ---------- */
@@ -519,12 +533,10 @@
 
     downloadJSON: function () {
       var S = global.FG.Store;
-      var blob = new Blob([S.exportJSON()], { type: 'application/json' });
-      var url = URL.createObjectURL(blob);
-      var a = h('a', { href: url, download: 'kroniky-rodu-' + new Date().toISOString().slice(0, 10) + '.json' });
-      document.body.appendChild(a); a.click();
-      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 400);
-      this.toast('Záloha stažena');
+      var name = 'kroniky-rodu-' + new Date().toISOString().slice(0, 10) + '.json';
+      global.FG.Files.save(name, S.exportJSON(), 'application/json', function (ok) {
+        if (ok) UI.toast('Záloha uložena');
+      });
     },
 
     importDialog: function (after) {
@@ -753,10 +765,10 @@
           {
             label: 'Stáhnout PNG', kind: 'primary',
             action: function () {
-              var fname = (tree.name || 'rodokmen').replace(/[^\wěščřžýáíéúůďťňĚŠČŘŽÝÁÍÉÚŮĎŤŇ -]/gi, '')
-                .trim().replace(/\s+/g, '-').toLowerCase() || 'rodokmen';
-              global.FG.Export.download(work, fname + '-' + opts.format + '.png');
-              UI.toast('Obrázek uložen');
+              var fname = asciiSlug(tree.name, 'rodokmen');
+              global.FG.Export.download(work, fname + '-' + opts.format + '.png', function (ok) {
+                if (ok) UI.toast('Obrázek uložen');
+              });
               return false;
             }
           }

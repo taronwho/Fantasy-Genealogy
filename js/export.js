@@ -499,14 +499,9 @@
     });
   }
 
-  function download(canvas, filename) {
+  function download(canvas, filename, onDone) {
     canvas.toBlob(function (blob) {
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 500);
+      global.FG.Files.save(filename, blob, 'image/png', onDone);
     }, 'image/png');
   }
 

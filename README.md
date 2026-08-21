@@ -35,6 +35,13 @@ ve formátu A5 nebo A4 — tak, aby se dal vložit do knihy nebo herního manuá
 Stačí otevřít `index.html` v prohlížeči (Chrome, Firefox, Safari, Edge).
 Aplikace nepotřebuje žádnou instalaci ani připojení k internetu.
 
+Pro přenášení na flash disku nebo posílání e-mailem se hodí jednosouborová
+verze — všechny styly i skripty jsou vložené uvnitř:
+
+```sh
+node build.js     # → dist/kroniky-rodu.html
+```
+
 Pokud chcete mít jistotu, že prohlížeč povolí ukládání dat, spusťte ji přes
 jednoduchý lokální server:
 
@@ -75,7 +82,9 @@ js/layout.js      výpočet rozvržení stromu (viditelnost, rozmístění, roze
 js/view.js        vykreslení do SVG, posun, přiblížení, výběr karet
 js/ui.js          dialogy, formuláře, kruhová nabídka, správa rodů
 js/export.js      vykreslení stránky kroniky do obrázku (pergamen, rám, strom)
+js/files.js       ukládání souborů (odkaz ke stažení, případně hostitel)
 js/app.js         propojení všech částí, klávesové zkratky, ukázkový rod
+build.js          sestavení jednosouborové verze do dist/
 ```
 
 Datový model stojí na *svazcích*: osoba (`person`) má jméno a údaje, svazek
