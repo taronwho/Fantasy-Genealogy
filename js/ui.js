@@ -753,7 +753,15 @@
             { v: 'view', l: 'Aktuální výřez' }, { v: 'full', l: 'Celý strom' }
           ]),
           seg('Vzhled', 'theme', [{ v: 'pergamen', l: 'Pergamen' }, { v: 'inkoust', l: 'Inkoust' }]),
-          info
+          info,
+          global.FG.Files.hosted()
+            ? h('p', {
+                class: 'dialog-text small',
+                text: 'Pokud se stažený soubor nikde neobjeví, otevřete obrázek ' +
+                  'tlačítkem Zobrazit a uložte ho podržením prstu — nebo si tuto ' +
+                  'stránku otevřete rovnou v prohlížeči.'
+              })
+            : null
         ]),
         h('div', { class: 'export-preview' }, [preview])
       ]);
@@ -763,11 +771,18 @@
         buttons: [
           { label: 'Zavřít' },
           {
+            label: 'Zobrazit',
+            action: function () {
+              UI.showImage(work, asciiSlug(tree.name, 'rodokmen') + '.png');
+              return false;
+            }
+          },
+          {
             label: 'Stáhnout PNG', kind: 'primary',
             action: function () {
               var fname = asciiSlug(tree.name, 'rodokmen');
               global.FG.Export.download(work, fname + '-' + opts.format + '.png', function (ok) {
-                if (ok) UI.toast('Obrázek uložen');
+                if (ok) UI.toast('Obrázek předán ke stažení');
               });
               return false;
             }
@@ -775,6 +790,54 @@
         ]
       });
       refresh();
+    },
+
+    /* Obrázek na celou obrazovku. Na telefonu jde podržet prstem a uložit
+       do galerie i tam, kde hostitelská aplikace stahování nedokončí. */
+    showImage: function (canvas, filename) {
+      UI.toast('Připravuji obrázek…');
+      setTimeout(function () {
+        var url = canvas.toDataURL('image/png');
+        var back = h('div', { class: 'image-back' });
+        var stage = h('div', { class: 'image-stage' });
+        var img = h('img', { class: 'image-full', src: url, alt: filename });
+
+        // obrázek na šířku na displeji na výšku otočíme, ať je co největší;
+        // uložená předloha zůstává v původní orientaci
+        if (canvas.width > canvas.height &&
+          global.innerHeight > global.innerWidth * 1.1) {
+          img.classList.add('turned');
+        }
+
+        var bar = h('div', { class: 'image-bar' }, [
+          h('span', {
+            class: 'image-hint',
+            text: 'Podržte prst na obrázku a zvolte uložení nebo sdílení.'
+          }),
+          h('button', {
+            class: 'btn primary', type: 'button', text: 'Zavřít',
+            onclick: function () { close(); }
+          })
+        ]);
+        stage.appendChild(img);
+        back.appendChild(stage);
+        back.appendChild(bar);
+        back.addEventListener('click', function (ev) {
+          if (ev.target === back || ev.target === stage) close();
+        });
+        function close() {
+          document.removeEventListener('keydown', onKey, true);
+          back.remove();
+        }
+        // zachycení dřív než dialog pod náhledem, ať Esc zavře jen obrázek
+        function onKey(ev) {
+          if (ev.key !== 'Escape') return;
+          ev.stopPropagation();
+          close();
+        }
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(back);
+      }, 40);
     },
 
     /* ---------- kruhové menu ---------- */
