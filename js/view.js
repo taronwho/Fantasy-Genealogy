@@ -374,7 +374,7 @@
           var t2 = el('text', {
             class: 'n-years', x: 0, y: ry + 17, 'text-anchor': 'middle'
           }, g);
-          t2.textContent = fitText(years, 'italic 12px ' + View.sans, maxW);
+          t2.textContent = fitText(years, 'italic 12px ' + View.serif, maxW);
         }
         if (settings.showNotes && p.note && p.note.trim()) {
           var note = el('g', {

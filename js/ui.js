@@ -790,7 +790,6 @@
       hide: function () {
         this.id = null;
         this.root.className = 'orbit';
-        this.root.style.background = '';
         this.root.textContent = '';
       },
 
@@ -800,9 +799,10 @@
         this.root.textContent = '';
         this.root.className = 'orbit on';
         // ztmavení okolí se „světlem" na vybrané kartě
-        this.root.style.background = 'radial-gradient(circle at ' +
-          Math.round(pos.x) + 'px ' + Math.round(pos.y) + 'px, ' +
-          'transparent 0, transparent 92px, var(--dim) 138px)';
+        this.root.appendChild(h('div', {
+          class: 'orbit-hole',
+          style: 'left:' + Math.round(pos.x) + 'px; top:' + Math.round(pos.y) + 'px'
+        }));
         // klepnutí mimo tlačítka: nabídku zavřeme, a pokud jsme trefili jinou
         // kartu, rovnou ji vybereme
         this.root.onclick = function (ev) {
