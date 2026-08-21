@@ -255,8 +255,19 @@
       this.onSelect(id, id ? this.screenPos(id) : null);
     },
 
-    /* posune plátno, aby kolem karty bylo místo na kruhové menu */
+    /* posune (a v případě potřeby přiblíží) plátno, aby se kolem karty
+       vešla kruhová nabídka */
     ensureVisible: function (id) {
+      var n = this.layout && this.layout.index[id];
+      if (!n) return;
+      var s0 = this.size();
+      var minK = 0.75;
+      if (this.t.k < minK) {
+        this.tweenTo({
+          k: minK, x: s0.w / 2 - n.x * minK, y: s0.h / 2 - n.y * minK
+        }, 260);
+        return;
+      }
       var p = this.screenPos(id);
       if (!p) return;
       var s = this.size(), pad = 170;

@@ -381,7 +381,7 @@
           h('div', { class: 'field' }, [
             h('span', {
               class: 'field-label',
-              text: 'Vybraná osoba je vůči osobě ' + S.label(tree, id)
+              text: 'Vztah k osobě ' + S.label(tree, id)
             }),
             h('div', { class: 'segmented' }, segs)
           ]),
