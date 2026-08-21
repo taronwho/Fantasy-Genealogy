@@ -30,7 +30,19 @@ ve formátu A5 nebo A4 — tak, aby se dal vložit do knihy nebo herního manuá
 - **Zálohy** — všechny rody se dají uložit do jednoho souboru JSON a zase načíst
   (přenos mezi počítači, sdílení se spoluautory).
 
-## Spuštění
+## Kde aplikace běží
+
+**https://taronwho.github.io/Fantasy-Genealogy/**
+
+Stránku vystavuje workflow `.github/workflows/pages.yml` při každé změně větve
+`main`. Kromě aplikace se tam publikuje i verze v jednom souboru:
+[kroniky-rodu.html](https://taronwho.github.io/Fantasy-Genealogy/kroniky-rodu.html).
+
+První vystavení vyžaduje jednorázové zapnutí v repozitáři — *Settings → Pages →
+Source: **GitHub Actions***. Token, se kterým workflow běží, si Pages zapnout
+sám nesmí.
+
+## Spuštění na svém počítači
 
 Stačí otevřít `index.html` v prohlížeči (Chrome, Firefox, Safari, Edge).
 Aplikace nepotřebuje žádnou instalaci ani připojení k internetu.
