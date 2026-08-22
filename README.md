@@ -19,9 +19,12 @@ ve formátu A5 nebo A4 — tak, aby se dal vložit do knihy nebo herního manuá
   pravnoučata, vše). Karty osob, jejichž příbuzní jsou právě skryti, mají
   značku `▲ 2` / `▼ 3` — klepnutím na ni se strom rozvine kolem nich.
 - **Větvení a proplétání.** Vazby se drží ve *svazcích*, takže jedna osoba může
-  být partnerem ve více svazcích, děti mohou být z různých svazků a dvě
-  samostatně založené větve rodu se dají kdykoli propojit (`Propojit`) nebo
-  rozpojit (`Odpojit`).
+  být partnerem ve více svazcích a děti mohou být z různých svazků. V každém
+  dialogu (`Přidat rodiče`, `Přidat partnera`, `Přidat dítě`) se přepínačem
+  *Novou postavu / Ze stromu* volí, jestli zakládáte novou postavu, nebo
+  svazkem spojíte dvě, které už ve stromu jsou — tak se propojí i větve
+  zakládané odděleně. Totéž svede `Propojit`, opačně pak `Odpojit`.
+  Vazba, která by v rodokmenu vytvořila kruh, se odmítne.
 - **U každé osoby**: jméno, pohlaví, rok narození a úmrtí (volný text, klidně
   „3. věk, 244") a poznámka.
 - **Export obrázku** — A5 nebo A4, 300 DPI, na výšku i na šířku, v provedení

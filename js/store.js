@@ -341,8 +341,8 @@
       return c.id;
     },
 
-    /* propojení dvou existujících osob */
-    link: function (tree, personId, otherId, relation) {
+    /* propojení dvou existujících osob; unionId upřesňuje svazek u vztahu 'child' */
+    link: function (tree, personId, otherId, relation, unionId) {
       if (personId === otherId) return 'Nelze propojit osobu se sebou samou.';
       this.snapshot();
       var msg = null;
@@ -353,19 +353,23 @@
         if (exists) msg = 'Tyto osoby už partnery jsou.';
         else this.newUnion(tree, [personId, otherId]);
       } else if (relation === 'child') {
-        // otherId se stane dítětem personId
-        if (this.isDescendant(tree, personId, otherId)) {
+        // otherId se stane dítětem personId — kruh by vznikl, kdyby personId
+        // byl potomkem otherId
+        if (this.isDescendant(tree, otherId, personId)) {
           msg = 'To by vytvořilo kruh v rodokmenu.';
         } else {
-          var un = this.unionsOf(tree, personId);
-          var u2 = un[0] || this.newUnion(tree, [personId]);
+          var u2 = (unionId && tree.unions[unionId] &&
+            tree.unions[unionId].partners.indexOf(personId) !== -1)
+            ? tree.unions[unionId]
+            : this.unionsOf(tree, personId)[0] || this.newUnion(tree, [personId]);
           this.detachFromParents(tree, otherId);
           tree.people[otherId].parentUnionId = u2.id;
           if (u2.children.indexOf(otherId) === -1) u2.children.push(otherId);
         }
       } else if (relation === 'parent') {
-        // otherId se stane rodičem personId
-        if (this.isDescendant(tree, otherId, personId)) {
+        // otherId se stane rodičem personId — kruh by vznikl, kdyby otherId
+        // byl potomkem personId
+        if (this.isDescendant(tree, personId, otherId)) {
           msg = 'To by vytvořilo kruh v rodokmenu.';
         } else {
           var me = tree.people[personId];

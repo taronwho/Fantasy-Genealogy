@@ -220,6 +220,99 @@
       });
     },
 
+    /* ---------- výběr osoby, která už ve stromu je ---------- */
+
+    picker: function (tree, opts) {
+      opts = opts || {};
+      var S = global.FG.Store;
+      var exclude = opts.exclude || [];
+      var selected = null;
+      var search = h('input', { type: 'search', placeholder: 'Hledat jméno…' });
+      var list = h('div', { class: 'pick-list' });
+
+      function draw() {
+        list.textContent = '';
+        var q = search.value.trim().toLowerCase();
+        var ids = Object.keys(tree.people).filter(function (pid) {
+          return exclude.indexOf(pid) === -1;
+        });
+        if (q) {
+          ids = ids.filter(function (pid) {
+            var p = tree.people[pid];
+            return ((p.name || '') + ' ' + (p.note || '')).toLowerCase().indexOf(q) !== -1;
+          });
+        }
+        ids.sort(function (a, b) {
+          return S.label(tree, a).localeCompare(S.label(tree, b), 'cs');
+        });
+        if (!ids.length) {
+          list.appendChild(h('div', {
+            class: 'pick-empty',
+            text: q ? 'Nic nenalezeno.' : (opts.empty || 'Ve stromu není jiná osoba.')
+          }));
+        }
+        ids.slice(0, 150).forEach(function (pid) {
+          list.appendChild(h('button', {
+            class: 'pick' + (pid === selected ? ' on' : ''), type: 'button',
+            onclick: function () {
+              selected = pid;
+              draw();
+              if (opts.onPick) opts.onPick(pid);
+            }
+          }, [
+            h('span', { class: 'pick-name', text: S.label(tree, pid) }),
+            h('span', { class: 'pick-meta', text: S.lifespan(tree.people[pid]) })
+          ]));
+        });
+      }
+      search.addEventListener('input', draw);
+      draw();
+
+      var wrap = h('div', { class: 'picker' }, [
+        UI.field(opts.label || 'Osoba ve stromu', search),
+        list
+      ]);
+      wrap.selected = function () { return selected; };
+      return wrap;
+    },
+
+    segmented: function (options, value, onPick) {
+      var box = h('div', { class: 'segmented' });
+      options.forEach(function (o) {
+        box.appendChild(h('button', {
+          type: 'button', class: 'seg' + (o.v === value ? ' on' : ''), text: o.l,
+          onclick: function (ev) {
+            var sibs = box.querySelectorAll('.seg');
+            for (var i = 0; i < sibs.length; i++) sibs[i].classList.remove('on');
+            ev.currentTarget.classList.add('on');
+            onPick(o.v);
+          }
+        }));
+      });
+      return box;
+    },
+
+    /* přepínač mezi „založit novou postavu" a „vzít někoho ze stromu" */
+    sourceSwitch: function (newBlock, pickBlock, labels) {
+      var mode = 'new';
+      function apply() {
+        newBlock.style.display = mode === 'new' ? '' : 'none';
+        pickBlock.style.display = mode === 'new' ? 'none' : '';
+      }
+      var box = h('div', { class: 'field' }, [
+        h('span', { class: 'field-label', text: 'Koho přidat' }),
+        UI.segmented([
+          { v: 'new', l: (labels && labels.newLabel) || 'Novou postavu' },
+          { v: 'pick', l: (labels && labels.pickLabel) || 'Ze stromu' }
+        ], mode, function (v) { mode = v; apply(); })
+      ]);
+      apply();
+      box.mode = function () { return mode; };
+      return box;
+    },
+
+    /* ---------- přidávání příbuzných ---------- */
+
     addParents: function (tree, id) {
       var S = global.FG.Store;
       var existing = S.parentsOf(tree, id);
@@ -227,29 +320,47 @@
         this.toast('Tato osoba už má oba rodiče.', 'warn');
         return;
       }
-      var forms = [];
-      var content = h('div', {}, []);
-      content.appendChild(h('p', {
-        class: 'dialog-text',
-        text: existing.length === 1
-          ? 'Doplňte druhého rodiče k osobě ' + S.label(tree, id) + '.'
-          : 'Zadejte rodiče osoby ' + S.label(tree, id) + '. Prázdné pole se přeskočí.'
-      }));
       var slots = existing.length === 1 ? [{ label: 'Druhý rodič', gender: 'x' }]
         : [{ label: 'Otec', gender: 'm' }, { label: 'Matka', gender: 'f' }];
+      var forms = [];
+      var newBlock = h('div', {});
       slots.forEach(function (slot) {
         var f = UI.personForm({ gender: slot.gender }, { heading: slot.label });
         forms.push(f);
-        content.appendChild(f);
+        newBlock.appendChild(f);
       });
+
+      var pick = this.picker(tree, {
+        exclude: existing.concat([id]),
+        label: 'Rodičem se stane',
+        empty: 'Ve stromu zatím není jiná postava.'
+      });
+      var sw = this.sourceSwitch(newBlock, pick);
+
       this.modal({
-        title: 'Přidat rodiče', wide: slots.length > 1,
-        content: content,
+        title: 'Přidat rodiče', wide: true,
+        content: h('div', {}, [
+          h('p', {
+            class: 'dialog-text',
+            text: existing.length === 1
+              ? 'Druhý rodič osoby ' + S.label(tree, id) + '.'
+              : 'Rodiče osoby ' + S.label(tree, id) + '. Prázdný formulář se přeskočí.'
+          }),
+          sw, newBlock, pick
+        ]),
         buttons: [
           { label: 'Zrušit' },
           {
             label: 'Přidat', kind: 'primary',
             action: function () {
+              if (sw.mode() === 'pick') {
+                var target = pick.selected();
+                if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
+                var err = S.link(tree, id, target, 'parent');
+                if (err) { UI.toast(err, 'warn'); return false; }
+                UI.toast('Rodič připojen');
+                return;
+              }
               var data = forms.map(function (f) { return f.isEmpty() ? null : f.read(); });
               if (!data.some(function (d) { return !!d; })) {
                 UI.toast('Vyplňte alespoň jedno jméno.', 'warn');
@@ -266,18 +377,39 @@
     addPartner: function (tree, id) {
       var S = global.FG.Store;
       var p = tree.people[id];
-      var form = this.personForm({ gender: p.gender === 'm' ? 'f' : p.gender === 'f' ? 'm' : 'x' });
+      var form = this.personForm({
+        gender: p.gender === 'm' ? 'f' : p.gender === 'f' ? 'm' : 'x'
+      });
+      var pick = this.picker(tree, {
+        exclude: S.partnersOf(tree, id).concat([id]),
+        label: 'Partnerem se stane',
+        empty: 'Ve stromu zatím není jiná postava.'
+      });
+      var sw = this.sourceSwitch(form, pick);
+
       this.modal({
-        title: 'Přidat partnera',
+        title: 'Přidat partnera', wide: true,
         content: h('div', {}, [
-          h('p', { class: 'dialog-text', text: 'Nový partner osoby ' + S.label(tree, id) + '.' }),
-          form
+          h('p', {
+            class: 'dialog-text',
+            text: 'Partner osoby ' + S.label(tree, id) + '. Můžete založit novou postavu, ' +
+              'nebo svazkem spojit dvě, které už ve stromu jsou.'
+          }),
+          sw, form, pick
         ]),
         buttons: [
           { label: 'Zrušit' },
           {
             label: 'Přidat', kind: 'primary',
             action: function () {
+              if (sw.mode() === 'pick') {
+                var target = pick.selected();
+                if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
+                var err = S.link(tree, id, target, 'partner');
+                if (err) { UI.toast(err, 'warn'); return false; }
+                UI.toast('Svazek vytvořen');
+                return;
+              }
               if (form.isEmpty()) { UI.toast('Vyplňte jméno.', 'warn'); return false; }
               S.addPartner(tree, id, form.read());
               UI.toast('Partner přidán');
@@ -293,7 +425,9 @@
       var choice = null;
       var content = h('div', {});
       content.appendChild(h('p', {
-        class: 'dialog-text', text: 'Nové dítě osoby ' + S.label(tree, id) + '.'
+        class: 'dialog-text',
+        text: 'Dítě osoby ' + S.label(tree, id) + '. Můžete založit novou postavu, ' +
+          'nebo pod rodiče zařadit někoho, kdo už ve stromu je.'
       }));
       if (unions.length) {
         var sel = h('select', {});
@@ -308,18 +442,39 @@
         choice = sel;
         content.appendChild(this.field('Rodičovský svazek', sel));
       }
+
       var form = this.personForm({});
+      var pick = this.picker(tree, {
+        exclude: S.childrenOf(tree, id).concat([id]),
+        label: 'Dítětem se stane',
+        empty: 'Ve stromu zatím není jiná postava.'
+      });
+      var sw = this.sourceSwitch(form, pick);
+      content.appendChild(sw);
       content.appendChild(form);
+      content.appendChild(pick);
+
       this.modal({
-        title: 'Přidat dítě',
+        title: 'Přidat dítě', wide: true,
         content: content,
         buttons: [
           { label: 'Zrušit' },
           {
             label: 'Přidat', kind: 'primary',
             action: function () {
-              if (form.isEmpty()) { UI.toast('Vyplňte jméno.', 'warn'); return false; }
               var uid = choice ? (choice.value || null) : null;
+              if (sw.mode() === 'pick') {
+                var target = pick.selected();
+                if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
+                var hadParents = S.parentsOf(tree, target).length > 0;
+                var err = S.link(tree, id, target, 'child', uid);
+                if (err) { UI.toast(err, 'warn'); return false; }
+                UI.toast(hadParents
+                  ? 'Dítě připojeno a odpojeno od dosavadních rodičů'
+                  : 'Dítě připojeno');
+                return;
+              }
+              if (form.isEmpty()) { UI.toast('Vyplňte jméno.', 'warn'); return false; }
               S.addChild(tree, id, uid, form.read());
               UI.toast('Dítě přidáno');
             }
@@ -330,57 +485,11 @@
 
     linkPerson: function (tree, id) {
       var S = global.FG.Store;
-      var targetId = null;
       var relation = 'partner';
-      var search = h('input', { type: 'search', placeholder: 'Hledat osobu ve stromu…' });
-      var list = h('div', { class: 'pick-list' });
-
-      function draw(q) {
-        list.textContent = '';
-        var ids = Object.keys(tree.people).filter(function (pid) { return pid !== id; });
-        if (q) {
-          var lc = q.toLowerCase();
-          ids = ids.filter(function (pid) {
-            return ((tree.people[pid].name || '') + ' ' + (tree.people[pid].note || ''))
-              .toLowerCase().indexOf(lc) !== -1;
-          });
-        }
-        ids.sort(function (a, b) {
-          return S.label(tree, a).localeCompare(S.label(tree, b), 'cs');
-        });
-        if (!ids.length) {
-          list.appendChild(h('div', { class: 'pick-empty', text: 'Nic nenalezeno.' }));
-        }
-        ids.slice(0, 120).forEach(function (pid) {
-          var p = tree.people[pid];
-          var row = h('button', {
-            class: 'pick' + (pid === targetId ? ' on' : ''), type: 'button',
-            onclick: function () { targetId = pid; draw(search.value); }
-          }, [
-            h('span', { class: 'pick-name', text: S.label(tree, pid) }),
-            h('span', { class: 'pick-meta', text: S.lifespan(p) })
-          ]);
-          list.appendChild(row);
-        });
-      }
-      search.addEventListener('input', function () { draw(search.value); });
-      draw('');
-
-      var rels = [
-        { v: 'partner', l: 'Partner' },
-        { v: 'parent', l: 'Rodič' },
-        { v: 'child', l: 'Dítě' }
-      ];
-      var segs = rels.map(function (r) {
-        return h('button', {
-          type: 'button', class: 'seg' + (r.v === relation ? ' on' : ''), text: r.l,
-          onclick: function (ev) {
-            relation = r.v;
-            var sibs = ev.target.parentNode.querySelectorAll('.seg');
-            for (var i = 0; i < sibs.length; i++) sibs[i].classList.remove('on');
-            ev.target.classList.add('on');
-          }
-        });
+      var pick = this.picker(tree, {
+        exclude: [id],
+        label: 'Vyberte osobu',
+        empty: 'Ve stromu zatím není jiná postava.'
       });
 
       this.modal({
@@ -397,18 +506,22 @@
               class: 'field-label',
               text: 'Vztah k osobě ' + S.label(tree, id)
             }),
-            h('div', { class: 'segmented' }, segs)
+            this.segmented([
+              { v: 'partner', l: 'Partner' },
+              { v: 'parent', l: 'Rodič' },
+              { v: 'child', l: 'Dítě' }
+            ], relation, function (v) { relation = v; })
           ]),
-          this.field('Osoba', search),
-          list
+          pick
         ]),
         buttons: [
           { label: 'Zrušit' },
           {
             label: 'Propojit', kind: 'primary',
             action: function () {
-              if (!targetId) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
-              var err = S.link(tree, id, targetId, relation);
+              var target = pick.selected();
+              if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
+              var err = S.link(tree, id, target, relation);
               if (err) { UI.toast(err, 'warn'); return false; }
               UI.toast('Propojeno');
             }
