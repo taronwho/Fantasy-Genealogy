@@ -236,6 +236,12 @@
         this.onAction(chip.getAttribute('data-chip'), chip.getAttribute('data-id'));
         return;
       }
+      var u = target.closest ? target.closest('[data-union]') : null;
+      if (u) {
+        this.select(null);
+        this.onAction('union', u.getAttribute('data-union'));
+        return;
+      }
       var g = target.closest ? target.closest('.node') : null;
       if (g) {
         var id = g.getAttribute('data-id');
@@ -296,17 +302,17 @@
         var u = layout.unionIndex[link.unionId];
         var c = idx[link.childId];
         if (!u || !c) return;
-        var uy = u.y + M.NODE_H / 2;
+        var ux = u.ax, uy = u.ay;
         var cy = c.y - M.NODE_H / 2;
         var cls = 'link-child';
         var d;
         if (cy - uy > 20) {
           var busY = cy - Math.min(46, (cy - uy) / 2);
-          d = elbow(u.x, uy, c.x, cy, busY, 12);
+          d = elbow(ux, uy, c.x, cy, busY, 12);
         } else {
           cls += ' link-remote';
-          d = 'M' + u.x + ' ' + u.y + ' C' + u.x + ' ' + ((u.y + c.y) / 2) +
-            ' ' + c.x + ' ' + ((u.y + c.y) / 2) + ' ' + c.x + ' ' + c.y;
+          d = 'M' + ux + ' ' + uy + ' C' + ux + ' ' + ((uy + c.y) / 2) +
+            ' ' + c.x + ' ' + ((uy + c.y) / 2) + ' ' + c.x + ' ' + c.y;
         }
         el('path', { d: d, class: cls }, View.gLinks);
       });
@@ -317,8 +323,18 @@
         if (!a || !b) return;
         var cls = 'link-partner';
         var d;
-        if (Math.abs(a.y - b.y) < 1) {
-          var left = a.x < b.x ? a : b, right = a.x < b.x ? b : a;
+        var left = a.x < b.x ? a : b, right = a.x < b.x ? b : a;
+        if (link.arc) {
+          // mezi partnery stojí někdo další — svazek vedeme obloukem nad řadou;
+          // nožky jsou mimo střed karty, kde už ústí linka od rodičů
+          var top = link.arcTop, r = 8, lx = left.x + 34, rx = right.x - 34;
+          d = 'M' + lx + ' ' + (left.y - M.NODE_H / 2) +
+            ' V' + (top + r) +
+            ' Q' + lx + ' ' + top + ' ' + (lx + r) + ' ' + top +
+            ' H' + (rx - r) +
+            ' Q' + rx + ' ' + top + ' ' + rx + ' ' + (top + r) +
+            ' V' + (right.y - M.NODE_H / 2);
+        } else if (Math.abs(a.y - b.y) < 1) {
           d = 'M' + (left.x + M.NODE_W / 2) + ' ' + left.y + ' H' + (right.x - M.NODE_W / 2);
         } else {
           cls += ' link-remote';
@@ -327,12 +343,30 @@
         el('path', { d: d, class: cls }, View.gLinks);
       });
 
-      // značky svazků
+      // značky svazků — klepnutím se otevře jejich období a poznámka
       layout.unions.forEach(function (u) {
         if (u.partners.length < 2) return;
-        var g = el('g', { class: 'union', transform: 'translate(' + u.x + ',' + u.y + ')' }, View.gUnions);
+        var g = el('g', {
+          class: 'union' + (u.years ? ' has-years' : ''),
+          transform: 'translate(' + u.x + ',' + u.y + ')',
+          'data-union': u.id
+        }, View.gUnions);
+        el('circle', { r: 15, class: 'union-hit' }, g);
         el('path', { d: 'M0 -7 L7 0 L0 7 L-7 0 Z', class: 'union-mark' }, g);
+        el('path', { d: 'M0 -11 L11 0 L0 11 L-11 0 Z', class: 'union-ring' }, g);
       });
+
+      // období svazku u linky k potomkům
+      if (settings.showYears) {
+        layout.unions.forEach(function (u) {
+          if (!u.years || u.partners.length < 2) return;
+          var t = el('text', {
+            class: 'union-years', x: u.ax + 9, y: u.ay + 20,
+            'data-union': u.id
+          }, View.gUnions);
+          t.textContent = u.years;
+        });
+      }
 
       // karty osob — plakety s useknutými rohy
       layout.persons.forEach(function (n) {

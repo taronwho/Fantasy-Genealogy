@@ -200,6 +200,7 @@
   function onCanvasAction(action, id) {
     var tree = S.activeTree();
     if (action === 'focus') { setFocus(id); return; }
+    if (action === 'union') { UI.unionDialog(tree, id); return; }
     if (action === 'expand-up' || action === 'expand-down') {
       setFocus(id);
       UI.toast('Zaměřeno na ' + S.label(tree, id) + ' — strom se rozvine kolem ní');
@@ -336,7 +337,9 @@
       P[key] = p.id;
       return p.id;
     }
-    function union(a, b) { return S.newUnion(t, b ? [a, b] : [a]); }
+    function union(a, b, start, end) {
+      return S.newUnion(t, b ? [a, b] : [a], { start: start || '', end: end || '' });
+    }
     function kids(u) {
       for (var i = 1; i < arguments.length; i++) {
         u.children.push(arguments[i]);
@@ -354,19 +357,23 @@
     person('teta', 'Rada Havranová', 'f', '879', '940');
     person('tetin', 'Bors Kamenný', 'm', '870', '939');
     person('hrd', 'Kaeler Havran', 'm', '905', '', 'Hlavní hrdina kroniky. Nositel meče Jitřenka.');
+    person('zena1', 'Sirin z Popelavého dolu', 'f', '907', '945', 'První žena Kaelerova.');
     person('zena', 'Nyra z Jilmu', 'f', '909', '', 'Léčitelka, sestra řádu Bílého jilmu.');
     person('sestra', 'Idra Havranová', 'f', '907', '', 'Kapitánka jízdní stráže.');
     person('bratr', 'Torm Havran', 'm', '911', '958');
     person('bratranec', 'Vilém Kamenný', 'm', '901', '', 'Spojenec z vedlejší větve rodu.');
-    person('syn', 'Renar Havran', 'm', '931', '', 'Dědic Hvozdu.');
-    person('dcera', 'Lira Havranová', 'f', '934', '');
-    person('vnuk', 'Orlan Havran mladší', 'm', '958', '', 'Pojmenován po zakladateli rodu.');
+    person('syn0', 'Aran Havran', 'm', '928', '', 'Syn z prvního svazku.');
+    person('syn', 'Renar Havran', 'm', '951', '', 'Dědic Hvozdu.');
+    person('dcera', 'Lira Havranová', 'f', '954', '');
+    person('vnuk', 'Orlan Havran mladší', 'm', '978', '', 'Pojmenován po zakladateli rodu.');
 
-    var u0 = union(P.pra1, P.pra2); kids(u0, P.ded1, P.str1);
-    var u1 = union(P.ded1, P.ded2); kids(u1, P.otec, P.teta);
-    var u2 = union(P.otec, P.matka); kids(u2, P.hrd, P.sestra, P.bratr);
-    var u3 = union(P.teta, P.tetin); kids(u3, P.bratranec);
-    var u4 = union(P.hrd, P.zena); kids(u4, P.syn, P.dcera);
+    var u0 = union(P.pra1, P.pra2, '838', '889'); kids(u0, P.ded1, P.str1);
+    var u1 = union(P.ded1, P.ded2, '872', '918'); kids(u1, P.otec, P.teta);
+    var u2 = union(P.otec, P.matka, '902', '944'); kids(u2, P.hrd, P.sestra, P.bratr);
+    var u3 = union(P.teta, P.tetin, '898', '939'); kids(u3, P.bratranec);
+    // dva plnohodnotné svazky za sebou, každý s vlastními potomky
+    var u4a = union(P.hrd, P.zena1, '925', '945'); kids(u4a, P.syn0);
+    var u4 = union(P.hrd, P.zena, '950'); kids(u4, P.syn, P.dcera);
     var u5 = union(P.syn); kids(u5, P.vnuk);
 
     // původní prázdná osoba z nového stromu už není potřeba

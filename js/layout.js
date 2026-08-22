@@ -182,6 +182,7 @@
     /* --- 2) rozmístění ---------------------------------------------- */
     var placed = {};
     var placedUnion = {};
+    var unionMeta = {};   // kdo je v páru „domácí" a kdo připojený partner
 
     function unitBlock(personId, g) {
       var b = newBlock();
@@ -189,11 +190,14 @@
       var members = [personId];
       var partners = [];
       if (showPartners) {
+        // svazky chodí z úložiště seřazené podle začátku, takže partneři
+        // stojí v řadě tak, jak po sobě v životě postavy následovali
         S.unionsOf(tree, personId).forEach(function (u) {
           if (!visUnions[u.id]) return;
           u.partners.forEach(function (pid) {
             if (pid !== personId && vis[pid] && !placed[pid] && partners.indexOf(pid) === -1) {
               partners.push(pid);
+              unionMeta[u.id] = { owner: personId, other: pid };
             }
           });
         });
@@ -231,39 +235,36 @@
         var hasHere = other && b.memberPos[other] !== undefined;
         if (!kids.length && !hasHere) return;
         placedUnion[u.id] = true;
+        if (other) unionMeta[u.id] = { owner: personId, other: other };
+        // děti visí pod středem dvojice; u vzdáleného partnera pod ním samotným
         var ux = hasHere ? (b.memberPos[personId] + b.memberPos[other]) / 2 : b.memberPos[personId];
         unions.push({ id: u.id, x: ux, gen: g, kids: kids });
       });
       unions.sort(function (a, c) { return a.x - c.x; });
 
-      var childBlocks = [];
-      var groups = [];
+      // každý svazek má vlastní skupinu dětí vystředěnou pod sebou;
+      // teprve když by se skupiny překrývaly, odsuneme je od sebe
+      var merged = null;
       unions.forEach(function (u) {
-        var gb = [];
+        var blocks = [];
         u.kids.forEach(function (kid) {
           var kb = buildDown(kid, g + 1);
-          if (kb) { gb.push(kb); childBlocks.push(kb); }
+          if (kb) blocks.push(kb);
         });
-        groups.push({ union: u, blocks: gb });
-      });
-
-      if (childBlocks.length) {
-        var run = packRow(childBlocks, M.SIB_GAP);
-        var target, cur;
-        if (groups.length === 1) {
-          target = groups[0].union.x;
-          cur = rowCenter(run, g + 1);
-        } else {
-          var sum = 0, n = 0;
-          groups.forEach(function (gr) {
-            if (gr.blocks.length) { sum += gr.union.x * gr.blocks.length; n += gr.blocks.length; }
-          });
-          target = n ? sum / n : b.anchor;
-          cur = rowCenter(run, g + 1);
+        if (!blocks.length) return;
+        var group = packRow(blocks, M.SIB_GAP);
+        shiftBlock(group, u.x - rowCenter(group, g + 1));
+        if (!merged) { merged = group; return; }
+        var shift = 0;
+        for (var k in group.contour) {
+          if (merged.contour[k]) {
+            shift = Math.max(shift, merged.contour[k][1] + M.SIB_GAP - group.contour[k][0]);
+          }
         }
-        shiftBlock(run, target - cur);
-        mergeInto(b, run);
-      }
+        if (shift > 0) shiftBlock(group, shift);
+        mergeInto(merged, group);
+      });
+      if (merged) mergeInto(b, merged);
       return b;
     }
 
@@ -312,6 +313,7 @@
       var parents = vu.partners.filter(function (q) { return vis[q] && !placed[q]; });
       if (!parents.length) return row;
       var couple = coupleBlock(parents, g - 1);
+      if (parents.length >= 2) unionMeta[vu.id] = { owner: parents[0], other: parents[1] };
 
       var xs = [];
       tree.unions[vu.id].children.forEach(function (cid) {
@@ -419,30 +421,79 @@
       return { up: hu, down: hd };
     }
 
-    // svazky: pozice = střed mezi partnery
-    var seenUnion = {};
-    main.unions.forEach(function (u) { seenUnion[u.id] = true; });
+    // řady osob podle generací — potřebujeme je pro test sousednosti
+    var rows = {};
+    result.persons.forEach(function (n) {
+      (rows[n.gen] = rows[n.gen] || []).push(n);
+    });
+    Object.keys(rows).forEach(function (g) {
+      rows[g].sort(function (p, q) { return p.x - q.x; });
+    });
+
+    /* stojí mezi kartami dvojice ještě někdo další? */
+    function separated(a, b) {
+      var row = rows[a.gen] || [];
+      var lo = Math.min(a.x, b.x), hi = Math.max(a.x, b.x);
+      for (var i = 0; i < row.length; i++) {
+        var n = row[i];
+        if (n.id === a.id || n.id === b.id) continue;
+        if (n.x > lo + 1 && n.x < hi - 1) return true;
+      }
+      return false;
+    }
+
+    // svazky: značka mezi partnery, u nesousedících dvojic obloukem nad řadou
     Object.keys(visUnions).forEach(function (uid) {
       var vu = visUnions[uid];
+      var raw = tree.unions[uid];
       var pts = vu.partners.map(function (p) { return result.index[p]; })
         .filter(function (n) { return !!n; });
       if (!pts.length) return;
-      var x = pts.reduce(function (a, n) { return a + n.x; }, 0) / pts.length;
-      var y = pts.reduce(function (a, n) { return a + n.y; }, 0) / pts.length;
+
       var un = {
-        id: uid, x: x, y: y,
+        id: uid,
         partners: vu.partners.filter(function (p) { return !!result.index[p]; }),
-        children: vu.children.filter(function (c) { return !!result.index[c]; })
+        children: vu.children.filter(function (c) { return !!result.index[c]; }),
+        years: S.unionYears(raw),
+        note: (raw && raw.note) || '',
+        arc: false, remote: false
       };
-      result.unions.push(un);
-      result.unionIndex[uid] = un;
-      if (un.partners.length >= 2) {
-        for (var i = 1; i < un.partners.length; i++) {
+
+      if (pts.length >= 2) {
+        var a = pts[0], b = pts[1];
+        if (Math.abs(a.y - b.y) < 1) {
+          un.arc = separated(a, b);
+          un.x = (a.x + b.x) / 2;
+          un.y = un.arc ? a.y - M.NODE_H / 2 - 18 : a.y;
+          un.arcTop = a.y - M.NODE_H / 2 - 18;
+          var meta = unionMeta[uid];
+          var other = meta && meta.other && result.index[meta.other];
+          un.ax = un.arc ? (other ? other.x : Math.max(a.x, b.x)) : un.x;
+          un.ay = a.y + M.NODE_H / 2;
+        } else {
+          un.remote = true;
+          un.x = (a.x + b.x) / 2;
+          un.y = (a.y + b.y) / 2;
+          un.ax = un.x;
+          un.ay = un.y;
+        }
+        for (var i = 1; i < pts.length; i++) {
+          var partner = pts[i];
           result.partnerLinks.push({
-            unionId: uid, a: un.partners[0], b: un.partners[i]
+            unionId: uid, a: pts[0].id, b: partner.id,
+            arc: Math.abs(a.y - partner.y) < 1 && separated(pts[0], partner),
+            arcTop: un.arcTop
           });
         }
+      } else {
+        un.x = pts[0].x;
+        un.y = pts[0].y;
+        un.ax = pts[0].x;
+        un.ay = pts[0].y + M.NODE_H / 2;
       }
+
+      result.unions.push(un);
+      result.unionIndex[uid] = un;
       un.children.forEach(function (c) {
         result.childLinks.push({ unionId: uid, childId: c });
       });

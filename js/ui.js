@@ -204,16 +204,118 @@
       var p = tree.people[id];
       if (!p) return;
       var form = this.personForm(p);
+      var content = h('div', {}, [form]);
+
+      // období jednotlivých svazků — každý je plnohodnotný a má vlastní roky
+      var rows = [];
+      var unions = S.unionsOf(tree, id);
+      if (unions.length) {
+        var box = h('div', { class: 'union-edit' }, [
+          h('h3', { class: 'form-heading', text: 'Svazky' })
+        ]);
+        unions.forEach(function (u) {
+          var other = u.partners.filter(function (x) { return x !== id; })[0];
+          var from = h('input', { type: 'text', value: u.start || '', placeholder: 'od' });
+          var to = h('input', { type: 'text', value: u.end || '', placeholder: 'do' });
+          rows.push({ id: u.id, from: from, to: to });
+          box.appendChild(h('div', { class: 'union-row' }, [
+            h('span', {
+              class: 'union-who',
+              text: other ? S.label(tree, other) : 'Bez partnera'
+            }),
+            from, to
+          ]));
+        });
+        box.appendChild(h('p', {
+          class: 'dialog-text small',
+          text: 'Roky, kdy svazek trval. Poznámku k němu přidáte klepnutím ' +
+            'na kosočtverec mezi kartami ve stromu.'
+        }));
+        content.appendChild(box);
+      }
+
       this.modal({
         title: 'Upravit osobu',
-        content: form,
+        content: content,
         buttons: [
           { label: 'Zrušit' },
           {
             label: 'Uložit', kind: 'primary',
             action: function () {
-              S.updatePerson(tree, id, form.read());
+              S.batch(function () {
+                S.updatePerson(tree, id, form.read());
+                rows.forEach(function (r) {
+                  S.updateUnion(tree, r.id, {
+                    start: r.from.value.trim(), end: r.to.value.trim()
+                  });
+                });
+              });
               UI.toast('Uloženo');
+            }
+          }
+        ]
+      });
+    },
+
+    /* období a poznámka jednoho svazku — otevře se klepnutím na jeho značku */
+    unionDialog: function (tree, unionId) {
+      var S = global.FG.Store;
+      var u = tree.unions[unionId];
+      if (!u) return;
+      var names = u.partners.map(function (pid) { return S.label(tree, pid); });
+      var from = h('input', { type: 'text', value: u.start || '', placeholder: 'např. 1042' });
+      var to = h('input', { type: 'text', value: u.end || '', placeholder: 'prázdné = trvá' });
+      var note = h('textarea', { rows: '3', placeholder: 'Okolnosti sňatku, rozchodu…' });
+      note.value = u.note || '';
+      var kids = u.children.length;
+      var m;
+
+      var content = h('div', {}, [
+        h('p', { class: 'dialog-text', text: names.join('  ·  ') }),
+        h('div', { class: 'row2' }, [
+          UI.field('Od', from),
+          UI.field('Do', to)
+        ]),
+        UI.field('Poznámka', note),
+        h('p', {
+          class: 'dialog-text small',
+          text: kids
+            ? (kids === 1 ? 'Ze svazku pochází 1 potomek.'
+                          : 'Ze svazku pochází ' + kids + ' potomků.')
+            : 'Svazek zatím nemá potomky.'
+        }),
+        u.partners.length >= 2
+          ? h('button', {
+              class: 'mini danger', type: 'button', text: 'Rozdělit svazek',
+              onclick: function () {
+                m.close();
+                UI.confirm('Rozdělit svazek?',
+                  'Partneři přestanou být spojeni. ' +
+                  (kids ? 'Potomci zůstanou u ' + names[0] + '. ' : '') +
+                  'Vrátit lze pomocí Ctrl+Z.',
+                  function () {
+                    S.unlink(tree, u.partners[0], {
+                      kind: 'partner', unionId: u.id, targetId: u.partners[1]
+                    });
+                    UI.toast('Svazek rozdělen');
+                  }, 'Rozdělit');
+              }
+            })
+          : null
+      ]);
+
+      m = this.modal({
+        title: 'Svazek',
+        content: content,
+        buttons: [
+          { label: 'Zrušit' },
+          {
+            label: 'Uložit', kind: 'primary',
+            action: function () {
+              S.updateUnion(tree, unionId, {
+                start: from.value.trim(), end: to.value.trim(), note: note.value.trim()
+              });
+              UI.toast('Svazek uložen');
             }
           }
         ]
@@ -387,31 +489,41 @@
       });
       var sw = this.sourceSwitch(form, pick);
 
+      // období svazku — postava jich může mít víc za sebou a každý je vlastní
+      var from = h('input', { type: 'text', placeholder: 'např. 1042' });
+      var to = h('input', { type: 'text', placeholder: 'prázdné = trvá' });
+      var period = h('div', { class: 'union-period' }, [
+        h('h3', { class: 'form-heading', text: 'Období svazku' }),
+        h('div', { class: 'row2' }, [UI.field('Od', from), UI.field('Do', to)])
+      ]);
+
       this.modal({
         title: 'Přidat partnera', wide: true,
         content: h('div', {}, [
           h('p', {
             class: 'dialog-text',
             text: 'Partner osoby ' + S.label(tree, id) + '. Můžete založit novou postavu, ' +
-              'nebo svazkem spojit dvě, které už ve stromu jsou.'
+              'nebo svazkem spojit dvě, které už ve stromu jsou. ' +
+              'Svazků může mít postava víc — každý se svým obdobím i potomky.'
           }),
-          sw, form, pick
+          sw, form, pick, period
         ]),
         buttons: [
           { label: 'Zrušit' },
           {
             label: 'Přidat', kind: 'primary',
             action: function () {
+              var years = { start: from.value.trim(), end: to.value.trim() };
               if (sw.mode() === 'pick') {
                 var target = pick.selected();
                 if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
-                var err = S.link(tree, id, target, 'partner');
+                var err = S.link(tree, id, target, 'partner', null, years);
                 if (err) { UI.toast(err, 'warn'); return false; }
                 UI.toast('Svazek vytvořen');
                 return;
               }
               if (form.isEmpty()) { UI.toast('Vyplňte jméno.', 'warn'); return false; }
-              S.addPartner(tree, id, form.read());
+              S.addPartner(tree, id, form.read(), years);
               UI.toast('Partner přidán');
             }
           }

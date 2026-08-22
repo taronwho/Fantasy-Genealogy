@@ -87,8 +87,17 @@ body[data-theme="inkoust"] #stage { box-shadow: inset 0 0 240px rgba(0, 0, 0, .6
 }
 .link-partner { stroke-width: 2; }
 .link-remote { stroke-dasharray: 5 6; opacity: .75; }
+.union { cursor: pointer; }
+.union-hit { fill: transparent; }
 .union-mark { fill: var(--accent); }
-.union-ring { fill: none; stroke: var(--accent); stroke-width: 1; opacity: .55; }
+.union-ring { fill: none; stroke: var(--accent); stroke-width: 1; opacity: 0; }
+.union.has-years .union-ring { opacity: .5; }
+.union:hover .union-ring { opacity: 1; }
+.union:hover .union-mark { fill: var(--ink); }
+.union-years {
+  font-family: var(--serif); font-size: 11px; font-style: italic;
+  fill: var(--muted); pointer-events: none;
+}
 
 .node { cursor: pointer; }
 .node .card {
@@ -363,6 +372,23 @@ textarea { resize: vertical; min-height: 60px; }
 .mini:hover { border-color: var(--accent); color: var(--accent); }
 .mini.danger:hover { border-color: var(--danger); color: var(--danger); }
 .manager-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+.union-edit, .union-period {
+  margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line);
+}
+.union-row {
+  display: grid; grid-template-columns: 1fr 92px 92px; gap: 8px;
+  align-items: center; margin-bottom: 8px;
+}
+.union-who {
+  font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.union-row input { padding: 7px 10px; font-size: 13.5px; }
+@media (max-width: 480px) {
+  .union-row { grid-template-columns: 1fr; }
+  .union-who { margin-bottom: -2px; }
+}
 
 .export-wrap { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
 .export-controls { min-width: 0; }

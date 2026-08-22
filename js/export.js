@@ -222,21 +222,35 @@
       idx[c.id] = c;
       return c;
     });
+    // posun konkrétní osoby proti původnímu rozvržení
+    function shiftOf(id) {
+      var a = idx[id], b = layout.index[id];
+      return (a && b) ? a.y - b.y : 0;
+    }
     var unionIndex = {};
     var unions = layout.unions.map(function (u) {
-      var first = idx[u.partners[0]];
+      var dy = shiftOf(u.partners[0]);
       var c = {
-        id: u.id, x: u.x, y: first ? first.y : u.y,
+        id: u.id, x: u.x, y: u.y + dy,
+        ax: u.ax, ay: u.ay + dy,
+        arc: u.arc, arcTop: u.arcTop + dy, remote: u.remote,
+        years: u.years, note: u.note,
         partners: u.partners, children: u.children
       };
       unionIndex[c.id] = c;
       return c;
     });
+    var partnerLinks = layout.partnerLinks.map(function (l) {
+      return {
+        unionId: l.unionId, a: l.a, b: l.b,
+        arc: l.arc, arcTop: l.arcTop + shiftOf(l.a)
+      };
+    });
     var b = layout.bbox;
     var span = (layout.maxGen - layout.minGen) * extra;
     return {
       focusId: layout.focusId, persons: persons, unions: unions,
-      childLinks: layout.childLinks, partnerLinks: layout.partnerLinks,
+      childLinks: layout.childLinks, partnerLinks: partnerLinks,
       index: idx, unionIndex: unionIndex,
       minGen: layout.minGen, maxGen: layout.maxGen,
       bbox: { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 + span, w: b.w, h: b.h + span }
@@ -379,20 +393,20 @@
       var u = layout.unionIndex[link.unionId];
       var c = idx[link.childId];
       if (!u || !c) return;
-      var uy = u.y + M.NODE_H / 2;
+      var ux = u.ax, uy = u.ay;
       var cy = c.y - M.NODE_H / 2;
       ctx.save();
       if (cy - uy > 20) {
         var busY = cy - Math.min(48, (cy - uy) / 2);
         var r = 11;
         ctx.beginPath();
-        ctx.moveTo(u.x, uy);
-        if (Math.abs(c.x - u.x) < 1) {
+        ctx.moveTo(ux, uy);
+        if (Math.abs(c.x - ux) < 1) {
           ctx.lineTo(c.x, cy);
         } else {
-          var dir = c.x > u.x ? 1 : -1;
-          ctx.lineTo(u.x, busY - r);
-          ctx.quadraticCurveTo(u.x, busY, u.x + dir * r, busY);
+          var dir = c.x > ux ? 1 : -1;
+          ctx.lineTo(ux, busY - r);
+          ctx.quadraticCurveTo(ux, busY, ux + dir * r, busY);
           ctx.lineTo(c.x - dir * r, busY);
           ctx.quadraticCurveTo(c.x, busY, c.x, busY + r);
           ctx.lineTo(c.x, cy);
@@ -401,8 +415,8 @@
       } else {
         ctx.setLineDash([6, 6]);
         ctx.beginPath();
-        ctx.moveTo(u.x, u.y);
-        ctx.bezierCurveTo(u.x, (u.y + c.y) / 2, c.x, (u.y + c.y) / 2, c.x, c.y);
+        ctx.moveTo(ux, uy);
+        ctx.bezierCurveTo(ux, (uy + c.y) / 2, c.x, (uy + c.y) / 2, c.x, c.y);
         ctx.stroke();
       }
       ctx.restore();
@@ -411,10 +425,18 @@
     layout.partnerLinks.forEach(function (link) {
       var a = idx[link.a], b = idx[link.b];
       if (!a || !b) return;
+      var left = a.x < b.x ? a : b, right = a.x < b.x ? b : a;
       ctx.save();
       ctx.beginPath();
-      if (Math.abs(a.y - b.y) < 1) {
-        var left = a.x < b.x ? a : b, right = a.x < b.x ? b : a;
+      if (link.arc) {
+        var top = link.arcTop, r = 8, lx = left.x + 34, rx = right.x - 34;
+        ctx.moveTo(lx, left.y - M.NODE_H / 2);
+        ctx.lineTo(lx, top + r);
+        ctx.quadraticCurveTo(lx, top, lx + r, top);
+        ctx.lineTo(rx - r, top);
+        ctx.quadraticCurveTo(rx, top, rx, top + r);
+        ctx.lineTo(rx, right.y - M.NODE_H / 2);
+      } else if (Math.abs(a.y - b.y) < 1) {
         ctx.moveTo(left.x + M.NODE_W / 2, left.y);
         ctx.lineTo(right.x - M.NODE_W / 2, right.y);
       } else {
@@ -425,16 +447,22 @@
       ctx.restore();
     });
 
-    // svazek — kosočtverec s obroučkou
+    // svazek — kosočtverec s obroučkou a obdobím trvání
     layout.unions.forEach(function (u) {
       if (u.partners.length < 2) return;
       ctx.fillStyle = pal.accent;
       diamond(ctx, u.x, u.y, 6.5); ctx.fill();
-      ctx.strokeStyle = pal.accent;
-      ctx.lineWidth = 0.9;
-      ctx.globalAlpha = 0.5;
-      diamond(ctx, u.x, u.y, 10); ctx.stroke();
-      ctx.globalAlpha = 1;
+      if (u.years && settings.showYears) {
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 0.9;
+        ctx.globalAlpha = 0.5;
+        diamond(ctx, u.x, u.y, 10); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = pal.muted;
+        ctx.font = 'italic 11px ' + V.serif;
+        ctx.fillText(u.years, u.ax + 9, u.ay + 20);
+      }
       ctx.strokeStyle = pal.link;
       ctx.lineWidth = 1.8;
     });

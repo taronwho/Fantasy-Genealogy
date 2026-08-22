@@ -19,6 +19,12 @@
 
   function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
+  /* první číslo v zápisu roku; bez roku řadíme nakonec */
+  function yearKey(text) {
+    var m = /(-?\d+)/.exec(text || '');
+    return m ? parseInt(m[1], 10) : Infinity;
+  }
+
   /* při prvním spuštění se přizpůsobíme nastavení prohlížeče */
   function prefersDark() {
     try {
@@ -87,6 +93,12 @@
         t.view = t.view || {};
         if (t.view.up === null || t.view.up === undefined) t.view.up = Infinity;
         if (t.view.down === null || t.view.down === undefined) t.view.down = Infinity;
+        Object.keys(t.unions).forEach(function (uid2) {
+          var u = t.unions[uid2];
+          if (u.start === undefined) u.start = '';
+          if (u.end === undefined) u.end = '';
+          if (u.note === undefined) u.note = '';
+        });
         if (!t.focusId || !t.people[t.focusId]) {
           t.focusId = Object.keys(t.people)[0] || null;
         }
@@ -106,13 +118,23 @@
     onChange: function (fn) { this.listeners.push(fn); },
 
     emit: function (reason) {
+      if (this.silent) return;
       this.save();
       for (var i = 0; i < this.listeners.length; i++) this.listeners[i](reason);
     },
 
     /* ---------- undo ---------- */
 
+    /* několik změn najednou = jeden krok zpět a jedno překreslení */
+    batch: function (fn) {
+      this.snapshot();
+      this.silent = true;
+      try { fn(); } finally { this.silent = false; }
+      this.emit('batch');
+    },
+
     snapshot: function () {
+      if (this.silent) return;
       this.undoStack.push(JSON.stringify(this.state.trees));
       if (this.undoStack.length > MAX_UNDO) this.undoStack.shift();
       this.redoStack.length = 0;
@@ -232,10 +254,37 @@
       return p;
     },
 
-    newUnion: function (tree, partners) {
-      var u = { id: uid('u'), partners: (partners || []).slice(), children: [], note: '' };
+    newUnion: function (tree, partners, data) {
+      var u = {
+        id: uid('u'),
+        partners: (partners || []).slice(),
+        children: [],
+        start: (data && data.start) || '',
+        end: (data && data.end) || '',
+        note: (data && data.note) || ''
+      };
       tree.unions[u.id] = u;
       return u;
+    },
+
+    updateUnion: function (tree, unionId, data) {
+      var u = tree.unions[unionId];
+      if (!u) return;
+      this.snapshot();
+      ['start', 'end', 'note'].forEach(function (k) {
+        if (data[k] !== undefined) u[k] = data[k];
+      });
+      this.emit('union-update');
+    },
+
+    /* roky trvání svazku pro popisek u značky */
+    unionYears: function (u) {
+      if (!u) return '';
+      var a = (u.start || '').trim(), b = (u.end || '').trim();
+      if (a && b) return a + ' – ' + b;
+      if (a) return 'od ' + a;
+      if (b) return 'do ' + b;
+      return '';
     },
 
     updatePerson: function (tree, id, data) {
@@ -248,13 +297,18 @@
       this.emit('person-update');
     },
 
-    /* svazky, kde je osoba partnerem */
+    /* svazky, kde je osoba partnerem — seřazené podle začátku, aby šly
+       za sebou tak, jak v životě postavy následovaly */
     unionsOf: function (tree, personId) {
       var out = [];
       for (var k in tree.unions) {
         if (tree.unions[k].partners.indexOf(personId) !== -1) out.push(tree.unions[k]);
       }
-      return out;
+      return out.sort(function (a, b) {
+        var ka = yearKey(a.start), kb = yearKey(b.start);
+        if (ka === kb) return 0;          // Infinity − Infinity by dalo NaN
+        return ka < kb ? -1 : 1;
+      });
     },
 
     partnersOf: function (tree, personId) {
@@ -316,10 +370,10 @@
       return made;
     },
 
-    addPartner: function (tree, personId, data) {
+    addPartner: function (tree, personId, data, unionData) {
       this.snapshot();
       var p = this.newPerson(tree, data);
-      this.newUnion(tree, [personId, p.id]);
+      this.newUnion(tree, [personId, p.id], unionData);
       this.emit('add-partner');
       return p.id;
     },
@@ -342,7 +396,7 @@
     },
 
     /* propojení dvou existujících osob; unionId upřesňuje svazek u vztahu 'child' */
-    link: function (tree, personId, otherId, relation, unionId) {
+    link: function (tree, personId, otherId, relation, unionId, unionData) {
       if (personId === otherId) return 'Nelze propojit osobu se sebou samou.';
       this.snapshot();
       var msg = null;
@@ -351,7 +405,7 @@
           return u.partners.indexOf(otherId) !== -1;
         });
         if (exists) msg = 'Tyto osoby už partnery jsou.';
-        else this.newUnion(tree, [personId, otherId]);
+        else this.newUnion(tree, [personId, otherId], unionData);
       } else if (relation === 'child') {
         // otherId se stane dítětem personId — kruh by vznikl, kdyby personId
         // byl potomkem otherId

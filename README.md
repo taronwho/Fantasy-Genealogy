@@ -27,6 +27,12 @@ ve formátu A5 nebo A4 — tak, aby se dal vložit do knihy nebo herního manuá
   Vazba, která by v rodokmenu vytvořila kruh, se odmítne.
 - **U každé osoby**: jméno, pohlaví, rok narození a úmrtí (volný text, klidně
   „3. věk, 244") a poznámka.
+- **Víc svazků za sebou.** Postava jich může mít libovolně mnoho a všechny jsou
+  rovnocenné — každý má vlastní období (od–do), vlastní poznámku a vlastní
+  potomky. Partneři stojí v řadě podle toho, kdy svazek začal, děti visí pod
+  tím svazkem, ze kterého pocházejí, a roky trvání se píší k jeho značce.
+  Klepnutím na kosočtverec mezi kartami se svazek otevře k úpravě nebo
+  rozdělení; roky se dají zapsat i rovnou v `Upravit` u osoby.
 - **Export obrázku** — A5 nebo A4, 300 DPI, na výšku i na šířku, v provedení
   *Pergamen* nebo *Inkoust*. Orientaci i rozestupy pokolení aplikace volí sama
   tak, aby jména byla co největší; pokud by přesto vyšla drobná, upozorní na to.
