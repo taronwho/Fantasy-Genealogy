@@ -55,6 +55,7 @@
     View.onAction = onCanvasAction;
     UI.orbit.mount(treeSection, onOrbitAction);
 
+    initHistory();
     buildSidebar();
     buildRails();
     bindTools();
@@ -86,6 +87,34 @@
     });
   }
 
+  /* ---------------- historie prohlížeče ---------------- */
+  /* Tlačítko Zpět na telefonu má vracet stejně jako Zpět v aplikaci.
+     Za každý krok proto vložíme jeden záznam do historie prohlížeče a
+     samotný návrat vždy vede přes ni — ať se obojí nerozejde. */
+
+  var histDepth = 0;
+  var hasHistory = !!(global.history && global.history.pushState);
+
+  function pushHistory() {
+    if (!hasHistory) return;
+    histDepth += 1;
+    try { global.history.pushState({ fg: histDepth }, ''); }
+    catch (e) { histDepth -= 1; hasHistory = false; }
+  }
+
+  function initHistory() {
+    if (!hasHistory) return;
+    try { global.history.replaceState({ fg: 0 }, ''); }
+    catch (e) { hasHistory = false; return; }      // např. spuštění ze souboru
+    global.addEventListener('popstate', function () {
+      // shora dolů: dialog → kruhová nabídka → krok zpět ve světě
+      if (UI.closeTop()) { pushHistory(); return; }
+      if (UI.orbit.id) { View.select(null); pushHistory(); return; }
+      if (histDepth > 0) histDepth -= 1;
+      App.backNow();
+    });
+  }
+
   /* ---------------- rozcestník ---------------- */
 
   var App = {
@@ -94,7 +123,10 @@
     history: [],
 
     go: function (section, skipHistory) {
-      if (!skipHistory) this.history.push({ section: this.section, detail: this.detail });
+      if (!skipHistory) {
+        this.history.push({ section: this.section, detail: this.detail });
+        pushHistory();
+      }
       this.section = section;
       this.detail = null;
       remember(section);
@@ -102,7 +134,10 @@
     },
 
     open: function (id, skipHistory) {
-      if (!skipHistory) this.history.push({ section: this.section, detail: this.detail });
+      if (!skipHistory) {
+        this.history.push({ section: this.section, detail: this.detail });
+        pushHistory();
+      }
       var e = W.get(S.activeWorld(), id);
       if (e && W.TYPES[e.type]) this.section = e.type;
       this.detail = id;
@@ -110,7 +145,14 @@
       this.render();
     },
 
+    /* návrat pouštíme historií prohlížeče, ať tlačítko na telefonu
+       i tlačítko v aplikaci dělají totéž */
     back: function () {
+      if (hasHistory && histDepth > 0) { global.history.back(); return; }
+      this.backNow();
+    },
+
+    backNow: function () {
       var prev = this.history.pop();
       if (prev) {
         this.section = prev.section;

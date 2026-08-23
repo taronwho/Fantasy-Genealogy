@@ -86,6 +86,28 @@
       setTimeout(function () { t.remove(); }, 3700);
     },
 
+    /* ---------- vrstvy nad stránkou ---------- */
+    // Dialogy a náhled obrázku se hlásí sem, aby je šlo zavřít shora dolů —
+    // třeba tlačítkem Zpět na telefonu.
+    layers: [],
+
+    pushLayer: function (closeFn) {
+      var self = this, entry = { close: closeFn };
+      this.layers.push(entry);
+      return function () {
+        var i = self.layers.indexOf(entry);
+        if (i !== -1) self.layers.splice(i, 1);
+      };
+    },
+
+    /* zavře nejvýše položenou vrstvu; vrací, jestli bylo co zavřít */
+    closeTop: function () {
+      var top = this.layers.pop();
+      if (!top) return false;
+      top.close();
+      return true;
+    },
+
     modal: function (opts) {
       var self = this;
       var back = h('div', { class: 'modal-back' });
@@ -115,11 +137,13 @@
         if (ev.target === back) close();
       });
       document.body.appendChild(back);
+      var offLayer = UI.pushLayer(function () { close(); });
       requestAnimationFrame(function () { back.classList.add('in'); });
       var first = box.querySelector('input,textarea,select,button.primary');
       if (first) setTimeout(function () { first.focus(); }, 60);
 
       function close() {
+        if (offLayer) offLayer();
         back.classList.remove('in');
         document.removeEventListener('keydown', onKey);
         setTimeout(function () { back.remove(); }, 160);
@@ -1232,6 +1256,7 @@
           if (ev.target === back || ev.target === stage) close();
         });
         function close() {
+          if (offLayer) offLayer();
           document.removeEventListener('keydown', onKey, true);
           back.remove();
         }
@@ -1243,6 +1268,7 @@
         }
         document.addEventListener('keydown', onKey, true);
         document.body.appendChild(back);
+        var offLayer = UI.pushLayer(function () { close(); });
       }, 40);
     },
 
