@@ -613,9 +613,12 @@
     },
 
     /* unionId === null => samostatné rodičovství (svazek jen s touto osobou) */
+    /* unionId === 'new' znamená nový svazek jen s touto osobou —
+       dítě pak nepatří i jejímu partnerovi */
     addChild: function (tree, personId, unionId, data) {
       this.snapshot();
-      var u = unionId ? tree.unions[unionId] : null;
+      var u = (unionId && unionId !== 'new') ? tree.unions[unionId] : null;
+      if (!u && unionId === 'new') u = this.newUnion(tree, [personId]);
       if (!u) {
         var solo = this.unionsOf(tree, personId).filter(function (x) {
           return x.partners.length === 1;
@@ -651,10 +654,13 @@
         if (this.isDescendant(tree, otherId, personId)) {
           msg = 'To by vytvořilo kruh v rodokmenu.';
         } else {
-          var u2 = (unionId && tree.unions[unionId] &&
+          var zvoleny = (unionId && unionId !== 'new' && tree.unions[unionId] &&
             tree.unions[unionId].partners.indexOf(personId) !== -1)
-            ? tree.unions[unionId]
-            : this.unionsOf(tree, personId)[0] || this.newUnion(tree, [personId]);
+            ? tree.unions[unionId] : null;
+          var u2 = zvoleny ||
+            (unionId === 'new'
+              ? this.newUnion(tree, [personId])
+              : this.unionsOf(tree, personId)[0] || this.newUnion(tree, [personId]));
           this.detachFromParents(tree, otherId);
           tree.people[otherId].parentUnionId = u2.id;
           if (u2.children.indexOf(otherId) === -1) u2.children.push(otherId);

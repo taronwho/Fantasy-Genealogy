@@ -582,33 +582,44 @@
       });
     },
 
-    addChild: function (tree, id) {
+    /* Výběr rodičovského svazku. Bez něj by dítě spadlo do prvního svazku,
+       tedy i partnerovi — a to bývá špatně, když je druhý rodič neznámý. */
+    unionChoice: function (tree, id) {
       var S = global.FG.Store;
       var unions = S.unionsOf(tree, id);
-      var choice = null;
+      var sel = h('select', {});
+      unions.forEach(function (u) {
+        var other = u.partners.filter(function (x) { return x !== id; })[0];
+        sel.appendChild(h('option', {
+          value: u.id,
+          text: other ? 'Spolu s partnerem: ' + S.label(tree, other)
+                      : 'Sám/sama (druhý rodič neznámý)'
+        }));
+      });
+      sel.appendChild(h('option', {
+        value: 'new', text: 'Nový svazek bez partnera (druhý rodič neznámý)'
+      }));
+      var box = UI.field('Rodičovský svazek', sel);
+      if (!unions.length) { sel.value = 'new'; box.style.display = 'none'; }
+      return { el: box, value: function () { return sel.value; } };
+    },
+
+    addChild: function (tree, id) {
+      var S = global.FG.Store;
       var content = h('div', {});
       content.appendChild(h('p', {
         class: 'dialog-text',
         text: 'Dítě osoby ' + S.label(tree, id) + '. Můžete založit novou postavu, ' +
           'nebo pod rodiče zařadit někoho, kdo už ve stromu je.'
       }));
-      if (unions.length) {
-        var sel = h('select', {});
-        unions.forEach(function (u) {
-          var other = u.partners.filter(function (x) { return x !== id; })[0];
-          sel.appendChild(h('option', {
-            value: u.id,
-            text: other ? 'S partnerem: ' + S.label(tree, other) : 'Bez partnera'
-          }));
-        });
-        sel.appendChild(h('option', { value: '', text: 'Nový svazek bez partnera' }));
-        choice = sel;
-        content.appendChild(this.field('Rodičovský svazek', sel));
-      }
+      var choice = this.unionChoice(tree, id);
+      content.appendChild(choice.el);
 
       var form = this.personForm({});
+      // vlastní děti ze seznamu nemizí — díky tomu jde dítě přeřadit
+      // z páru pod jednoho rodiče a naopak
       var pick = this.picker(tree, {
-        exclude: S.childrenOf(tree, id).concat([id]),
+        exclude: [id],
         label: 'Dítětem se stane',
         empty: 'Ve stromu zatím není jiná postava.'
       });
@@ -625,16 +636,22 @@
           {
             label: 'Přidat', kind: 'primary',
             action: function () {
-              var uid = choice ? (choice.value || null) : null;
+              var uid = choice.value();
               if (sw.mode() === 'pick') {
                 var target = pick.selected();
                 if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
-                var hadParents = S.parentsOf(tree, target).length > 0;
+                var puvodni = S.parentsOf(tree, target);
+                var byloMoje = puvodni.indexOf(id) !== -1;
                 var err = S.link(tree, id, target, 'child', uid);
                 if (err) { UI.toast(err, 'warn'); return false; }
-                UI.toast(hadParents
-                  ? 'Dítě připojeno a odpojeno od dosavadních rodičů'
-                  : 'Dítě připojeno');
+                var noveRodice = S.parentsOf(tree, target).map(function (x) {
+                  return S.label(tree, x);
+                }).join(' a ');
+                UI.toast(byloMoje
+                  ? 'Nyní dítě: ' + noveRodice
+                  : (puvodni.length
+                      ? 'Dítě připojeno a odpojeno od dosavadních rodičů'
+                      : 'Dítě připojeno'));
                 return;
               }
               if (form.isEmpty()) { UI.toast('Vyplňte jméno.', 'warn'); return false; }
@@ -649,6 +666,8 @@
     linkPerson: function (tree, id) {
       var S = global.FG.Store;
       var relation = 'partner';
+      var choice = this.unionChoice(tree, id);
+      choice.el.style.display = 'none';          // patří jen ke vztahu „dítě"
       var pick = this.picker(tree, {
         exclude: [id],
         label: 'Vyberte postavu',
@@ -673,8 +692,12 @@
               { v: 'partner', l: 'Partner' },
               { v: 'parent', l: 'Rodič' },
               { v: 'child', l: 'Dítě' }
-            ], relation, function (v) { relation = v; })
+            ], relation, function (v) {
+              relation = v;
+              choice.el.style.display = (v === 'child' && S.unionsOf(tree, id).length) ? '' : 'none';
+            })
           ]),
+          choice.el,
           pick
         ]),
         buttons: [
@@ -684,7 +707,8 @@
             action: function () {
               var target = pick.selected();
               if (!target) { UI.toast('Vyberte osobu ze seznamu.', 'warn'); return false; }
-              var err = S.link(tree, id, target, relation);
+              var err = S.link(tree, id, target, relation,
+                relation === 'child' ? choice.value() : null);
               if (err) { UI.toast(err, 'warn'); return false; }
               UI.toast('Propojeno');
             }
