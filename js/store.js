@@ -532,6 +532,44 @@
       });
     },
 
+    /* ---------- ruční pořadí sourozenců ---------- */
+
+    /* Vodorovné pořadí ve stromu vychází z pořadí dětí ve svazku rodičů.
+       Posun doleva/doprava proto jen prohodí dvě jména v tomto seznamu. */
+    siblingRow: function (tree, personId) {
+      var p = tree.people[personId];
+      if (!p || !p.parentUnionId) return null;
+      var u = tree.unions[p.parentUnionId];
+      if (!u) return null;
+      var list = u.children.filter(function (id) { return !!tree.people[id]; });
+      var i = list.indexOf(personId);
+      if (i < 0 || list.length < 2) return null;
+      return { union: u, list: list, index: i };
+    },
+
+    canMove: function (tree, personId, dir) {
+      var row = this.siblingRow(tree, personId);
+      if (!row) return false;
+      var j = row.index + (dir < 0 ? -1 : 1);
+      return j >= 0 && j < row.list.length;
+    },
+
+    movePerson: function (tree, personId, dir) {
+      var row = this.siblingRow(tree, personId);
+      if (!row) return false;
+      var j = row.index + (dir < 0 ? -1 : 1);
+      if (j < 0 || j >= row.list.length) return false;
+      this.snapshot();
+      var list = row.list.slice();
+      var tmp = list[row.index];
+      list[row.index] = list[j];
+      list[j] = tmp;
+      var ghosts = row.union.children.filter(function (id) { return !tree.people[id]; });
+      row.union.children = list.concat(ghosts);
+      this.emit('person-update');
+      return true;
+    },
+
     addParents: function (tree, childId, fatherData, motherData) {
       this.snapshot();
       var child = tree.people[childId];

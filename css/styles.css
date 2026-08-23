@@ -207,7 +207,10 @@ html, body {
   position: absolute; left: -25px; top: 14px; width: 9px; height: 9px;
   background: var(--accent); transform: rotate(45deg);
 }
-.tl-year { font-size: 13px; color: var(--accent); font-weight: 600; min-width: 74px; flex: none; }
+.tl-year {
+  font-size: 13px; color: var(--accent); font-weight: 600;
+  width: 140px; flex: none; white-space: nowrap;
+}
 .tl-name { font-size: 15px; font-weight: 600; }
 .tl-where { margin-left: auto; font-size: 12px; color: var(--muted); font-style: italic; }
 
@@ -705,6 +708,7 @@ textarea { resize: vertical; min-height: 60px; }
   .ent-row.with-ico .ent-meta { margin-left: auto; text-align: right; width: auto; }
   .wide-row { flex-direction: column; align-items: flex-start; gap: 3px; }
   .tl-item { flex-wrap: wrap; gap: 4px 10px; }
+  .tl-year { width: auto; }
   .tl-where { margin-left: 0; width: 100%; }
   .page-actions .btn { font-size: 13px; padding: 8px 12px; }
 }

@@ -28,6 +28,8 @@
     link: '<path d="M9.5 14.5l5-5"/><path d="M12 7l2-2a3.5 3.5 0 015 5l-2 2"/><path d="M12 17l-2 2a3.5 3.5 0 01-5-5l2-2"/>',
     unlink: '<path d="M12 7l2-2a3.5 3.5 0 015 5l-2 2"/><path d="M12 17l-2 2a3.5 3.5 0 01-5-5l2-2"/><path d="M4 4l16 16"/>',
     trash: '<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/>',
+    left: '<path d="M13.5 6.5L8 12l5.5 5.5"/><path d="M19 12H8.4"/>',
+    right: '<path d="M10.5 6.5L16 12l-5.5 5.5"/><path d="M5 12h10.6"/>',
     focus: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="8"/>',
     search: '<circle cx="11" cy="11" r="6.4"/><path d="M16 16l4.5 4.5"/>',
     gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8l1.4 2.6 2.9-.5.6 2.9 2.6 1.4-1.5 2.5 1.5 2.5-2.6 1.4-.6 2.9-2.9-.5L12 21.2l-1.4-2.6-2.9.5-.6-2.9-2.6-1.4L6 12.3 4.5 9.8l2.6-1.4.6-2.9 2.9.5z"/>',
@@ -1232,14 +1234,18 @@
 
     orbit: {
       root: null, id: null,
+      // pořadí = poloha na kruhu (od horního bodu po směru hodin);
+      // šipky posunu proto sedí na pravé a levé straně nabídky
       items: [
         { a: 'edit', l: 'Upravit', i: 'edit' },
         { a: 'detail', l: 'Karta', i: 'book' },
         { a: 'parents', l: 'Přidat rodiče', i: 'parents' },
+        { a: 'right', l: 'Vpravo', i: 'right' },
         { a: 'partner', l: 'Přidat partnera', i: 'partner' },
         { a: 'child', l: 'Přidat dítě', i: 'child' },
         { a: 'link', l: 'Propojit', i: 'link' },
         { a: 'unlink', l: 'Odpojit', i: 'unlink' },
+        { a: 'left', l: 'Vlevo', i: 'left' },
         { a: 'focus', l: 'Zaměřit', i: 'focus' },
         { a: 'delete', l: 'Smazat', i: 'trash', danger: true }
       ],
@@ -1277,8 +1283,12 @@
           var node = under && under.closest ? under.closest('.node') : null;
           self.onAction('close', node ? node.getAttribute('data-id') : null);
         };
-        var R = 118;
         var n = this.items.length;
+        // s každou další položkou se kruh o kousek rozevře, na malém
+        // displeji se ale vejde jen tolik, kolik dovolí plátno
+        var box = this.root.getBoundingClientRect();
+        var R = 118 + Math.max(0, n - 9) * 14;
+        R = Math.min(R, Math.max(104, Math.min(box.width, box.height) / 2 - 40));
         var start = -Math.PI / 2;
         this.items.forEach(function (item, i) {
           var ang = start + (i / n) * Math.PI * 2;

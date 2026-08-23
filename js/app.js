@@ -357,6 +357,8 @@
     if (!S.relationsOf(tree, id).length) disabled.push('unlink');
     if (Object.keys(tree.people).length < 2) disabled.push('link');
     if (id === tree.focusId) disabled.push('focus');
+    if (!S.canMove(tree, id, -1)) disabled.push('left');
+    if (!S.canMove(tree, id, 1)) disabled.push('right');
     UI.orbit.show(id, pos, { disabled: disabled });
   }
 
@@ -380,6 +382,8 @@
       case 'child': UI.addChild(tree, id); break;
       case 'link': UI.linkPerson(tree, id); break;
       case 'unlink': UI.unlinkPerson(tree, id); break;
+      case 'left': movePerson(id, -1); break;
+      case 'right': movePerson(id, 1); break;
       case 'focus': setFocus(id); break;
       case 'detail': View.select(null); App.open(id); break;
       case 'delete':
@@ -388,6 +392,16 @@
           function () { S.deletePerson(tree, id); UI.toast('Osoba smazána'); }, 'Smazat');
         break;
     }
+  }
+
+  /* posun karty mezi sourozenci — po překreslení vrátíme nabídku na nové místo */
+  function movePerson(id, dir) {
+    var tree = S.activeTree();
+    if (!S.movePerson(tree, id, dir)) {
+      UI.toast('Dál už to nejde');
+      return;
+    }
+    View.select(id);
   }
 
   function setFocus(id) {

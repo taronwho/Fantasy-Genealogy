@@ -85,10 +85,20 @@
       Math.random().toString(36).slice(2, 7);
   }
 
-  /* první číslo v zápisu — pro řazení událostí a svazků */
+  /* první číslo v zápisu — pro řazení událostí a svazků.
+     „4378 př. rl" je dřív než „145 rl", proto se letopočty před počátkem
+     letopočtu berou záporně. */
   function yearKey(text) {
-    var m = /(-?\d+)/.exec(text || '');
-    return m ? parseInt(m[1], 10) : null;
+    var t = text || '';
+    var m = /(-?\d+)/.exec(t);
+    if (!m) return null;
+    var n = parseInt(m[1], 10);
+    // „př. rl", „před LL" hned za prvním číslem = záporný letopočet
+    var rest = t.slice(m.index + m[1].length);
+    var next = /\d/.exec(rest);
+    if (next) rest = rest.slice(0, next.index);
+    if (/(př\.|pred|před)/i.test(rest)) n = -n;
+    return n;
   }
 
   function norm(s) {
@@ -306,10 +316,9 @@
       var list = this.all(world, 'udalost');
       return list.sort(function (a, b) {
         var ka = yearKey(a.datum), kb = yearKey(b.datum);
-        if (ka === null && kb === null) return (a.name || '').localeCompare(b.name || '', 'cs');
+        if (ka === null && kb === null) return 0;   // beze data — v pořadí zápisu
         if (ka === null) return 1;
         if (kb === null) return -1;
-        if (ka === kb) return (a.name || '').localeCompare(b.name || '', 'cs');
         return ka - kb;
       });
     },

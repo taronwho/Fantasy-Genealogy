@@ -278,7 +278,7 @@
       }
       var p = this.screenPos(id);
       if (!p) return;
-      var s = this.size(), pad = 170;
+      var s = this.size(), pad = 182;
       var dx = 0, dy = 0;
       if (p.x < pad) dx = pad - p.x;
       if (p.x > s.w - pad) dx = s.w - pad - p.x;
