@@ -25,6 +25,10 @@ proklikatelné. Běží celá v prohlížeči, nic se nikam neodesílá.
 - **Časová osa** událostí seskupená po epochách a **kalendář světa** s měsíci,
   svátky a zvláštnostmi.
 - **Hledání napříč světem** (klávesa F) přes jména, přídomky i texty.
+- **Na telefonu** je vlevo rozcestník nahrazen spodní lištou s pěti hlavními
+  částmi a tlačítkem *Více*; nic se v ní neposouvá do stran. Lišty pokolení
+  v rodokmenu se na úzkém displeji překlopí do vodorovných pruhů nad a pod
+  strom, takže na karty zbude celá plocha.
 - **Víc světů** vedle sebe, záloha a obnova celého světa do souboru JSON.
 
 ### Rodokmeny

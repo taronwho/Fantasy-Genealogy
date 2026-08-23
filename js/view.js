@@ -121,8 +121,10 @@
     fit: function (animate) {
       if (!this.layout) return;
       var s = this.size(), b = this.layout.bbox;
-      var pad = 70;
-      var k = Math.min((s.w - pad * 2) / Math.max(b.w, 1), (s.h - pad * 2) / Math.max(b.h, 1));
+      // na úzkém displeji zabírají lišty pokolení pruh nahoře i dole
+      var padX = s.w < 620 ? 40 : 70;
+      var padY = s.w < 620 ? 118 : 70;
+      var k = Math.min((s.w - padX * 2) / Math.max(b.w, 1), (s.h - padY * 2) / Math.max(b.h, 1));
       k = Math.max(0.12, Math.min(1, k));
       var cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
       var target = { k: k, x: s.w / 2 - cx * k, y: s.h / 2 - cy * k };

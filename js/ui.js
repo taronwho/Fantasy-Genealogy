@@ -38,6 +38,7 @@
     fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h9a6 6 0 010 12h-3"/>',
+    more: '<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>',
     person: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.9 3.1-6.4 7-6.4s7 2.5 7 6.4"/>',
     world: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.3 3.6 5.2 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.2-3.6-8.5S9.6 5.8 12 3.5z"/>',
     home: '<path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10v9h11v-9"/>',

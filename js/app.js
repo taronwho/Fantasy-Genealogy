@@ -8,15 +8,16 @@
   var focusHistory = [];
   var pendingView = 'fit';
 
+  /* primary = na mobilu zůstává ve spodní liště, ostatní jsou pod „Více" */
   var SECTIONS = [
-    { id: 'prehled', label: 'Přehled', icon: 'home' },
-    { id: 'postava', label: 'Postavy', icon: 'person' },
-    { id: 'misto', label: 'Místa', icon: 'place' },
+    { id: 'prehled', label: 'Přehled', icon: 'home', primary: true },
+    { id: 'postava', label: 'Postavy', icon: 'person', primary: true },
+    { id: 'misto', label: 'Místa', icon: 'place', primary: true },
     { id: 'narod', label: 'Národy', icon: 'flag' },
-    { id: 'udalost', label: 'Události', icon: 'event' },
+    { id: 'udalost', label: 'Události', icon: 'event', primary: true },
     { id: 'kalendar', label: 'Kalendář', icon: 'moon' },
     { id: 'zapis', label: 'Zápisy', icon: 'book' },
-    { id: 'rodokmeny', label: 'Rodokmeny', icon: 'trees' }
+    { id: 'rodokmeny', label: 'Rodokmeny', icon: 'trees', primary: true }
   ];
 
   var UP_OPTIONS = [
@@ -170,7 +171,8 @@
     var nav = q('#sections');
     SECTIONS.forEach(function (sec) {
       var b = UI.h('button', {
-        class: 'side-link', type: 'button', 'data-sec': sec.id, title: sec.label
+        class: 'side-link', type: 'button', 'data-sec': sec.id,
+        'data-primary': sec.primary ? '1' : '0', title: sec.label
       }, [
         UI.h('span', { class: 'side-ico', html: UI.icon(sec.icon, 20) }),
         UI.h('span', { class: 'side-label', text: sec.label })
@@ -178,7 +180,41 @@
       b.addEventListener('click', function () { App.go(sec.id); });
       nav.appendChild(b);
     });
+    var more = UI.h('button', {
+      class: 'side-link more-link', type: 'button', title: 'Další části světa'
+    }, [
+      UI.h('span', { class: 'side-ico', html: UI.icon('more', 20) }),
+      UI.h('span', { class: 'side-label', text: 'Více' })
+    ]);
+    more.addEventListener('click', moreMenu);
+    nav.appendChild(more);
     q('#btn-world').addEventListener('click', function () { UI.worldManager(); });
+  }
+
+  /* nabídka zbylých částí — na mobilu se do lišty nevejdou */
+  function moreMenu() {
+    var m;
+    var list = UI.h('div', { class: 'card-list' });
+    function row(icon, label, meta, fn) {
+      list.appendChild(UI.h('button', {
+        class: 'ent-row with-ico', type: 'button',
+        onclick: function () { m.close(); fn(); }
+      }, [
+        UI.h('span', { class: 'row-ico', html: UI.icon(icon, 20) }),
+        UI.h('span', { class: 'ent-main' }, [UI.h('span', { class: 'ent-name', text: label })]),
+        UI.h('span', { class: 'ent-meta', text: meta || '' })
+      ]));
+    }
+    var world = S.activeWorld();
+    SECTIONS.forEach(function (sec) {
+      if (sec.primary) return;
+      var n = W.TYPES[sec.id] ? W.count(world, sec.id) : '';
+      row(sec.icon, sec.label, n === '' ? '' : String(n), function () { App.go(sec.id); });
+    });
+    row('search', 'Hledat ve světě', '', function () { UI.worldSearch(); });
+    row('world', 'Světy a zálohy', world.name, function () { UI.worldManager(); });
+    row('gear', 'Nastavení', '', function () { UI.settings(); });
+    m = UI.modal({ title: 'Další části světa', content: list, buttons: [{ label: 'Zavřít' }] });
   }
 
   /* ---------------- rodokmen ---------------- */

@@ -99,6 +99,8 @@ html, body {
 }
 .side-ico { display: flex; flex: none; }
 .side-foot { border-top: 1px solid var(--line); padding: 6px 0; }
+.more-link { display: none; }
+.row-ico { color: var(--accent); display: flex; flex: none; }
 
 #content { flex: 1; position: relative; min-width: 0; }
 #page {
@@ -655,35 +657,79 @@ textarea { resize: vertical; min-height: 60px; }
 
 @media (max-width: 860px) {
   #app { flex-direction: column-reverse; }
+
+  /* postranní rozcestník se mění na spodní lištu; vejde se do ní pět
+     hlavních částí a tlačítko Více, takže se nikam neposouvá */
   #sidebar {
-    width: 100%; flex-direction: row; overflow-x: auto;
+    width: 100%; flex-direction: row; overflow: hidden;
     border-right: 0; border-top: 1px solid var(--line);
-    box-shadow: 0 -2px 12px rgba(60, 44, 24, .08);
+    box-shadow: 0 -2px 14px rgba(60, 44, 24, .10);
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
-  .world-btn { border-bottom: 0; border-right: 1px solid var(--line); flex: none; max-width: 46vw; }
-  #sections { display: flex; flex: 1; padding: 0; }
-  .side-foot { display: flex; border-top: 0; border-left: 1px solid var(--line); padding: 0; }
+  .world-btn, .side-foot { display: none; }
+  #sections { display: flex; flex: 1; padding: 0; overflow: hidden; }
+  .side-link[data-primary="0"] { display: none; }
+  .more-link { display: flex; }
   .side-link, .side-tool {
-    flex-direction: column; gap: 2px; padding: 8px 12px; width: auto;
-    border-left: 0; border-bottom: 3px solid transparent; font-size: 10.5px;
-    white-space: nowrap;
+    flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px;
+    padding: 8px 2px 7px; width: auto;
+    border-left: 0; border-bottom: 3px solid transparent; font-size: 10px;
+    letter-spacing: 0; justify-content: center;
+  }
+  .side-label {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .side-link.on { border-left-color: transparent; border-bottom-color: var(--accent); }
+
   .page-inner { padding: 20px 16px 40px; }
+  .page-title { font-size: 23px; }
   .field-key { min-width: 0; }
+  .field-row { flex-direction: column; gap: 2px; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .tile { padding: 12px 8px; }
+  .detail-head, .page-head { align-items: flex-start; }
+}
+
+@media (max-width: 560px) {
+  /* na úzkém displeji čteme řádky pod sebou, ne ve dvou sloupcích */
+  .ent-row { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .ent-meta { margin-left: 0; max-width: 100%; text-align: left; }
+  .ent-row.with-ico { flex-direction: row; align-items: center; gap: 12px; }
+  .ent-row.with-ico .ent-meta { margin-left: auto; text-align: right; width: auto; }
+  .wide-row { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .tl-item { flex-wrap: wrap; gap: 4px 10px; }
+  .tl-where { margin-left: 0; width: 100%; }
+  .page-actions .btn { font-size: 13px; padding: 8px 12px; }
 }
 
 @media (max-width: 720px) {
-  .rail-btn { width: 62px; font-size: 10px; }
+  /* plátno rodokmenu: lišty pokolení jdou vodorovně nad a pod strom,
+     ať zbyde co nejvíc místa na samotné karty */
+  .topbar { top: 8px; left: 8px; right: 8px; transform: none; }
+  .chip-btn { width: 100%; max-width: none; padding: 6px 12px; }
+  .chip-txt strong { font-size: 14px; }
+
+  .rail-tl { top: 58px; left: 8px; right: 62px; }
+  .rail-bl { bottom: 8px; left: 8px; right: 62px; }
+  .rail-tl .rail-group, .rail-bl .rail-group { flex-direction: row; }
+  .rail-title { display: none; }
+  .rail-btn {
+    flex: 1 1 0; width: auto; min-width: 0; padding: 5px 2px;
+    border-bottom: 0; border-right: 1px solid var(--line); font-size: 9.5px;
+  }
+  .rail-btn:last-child { border-right: 0; }
+  .rail-btn .rb-ico { font-size: 13px; }
+  .rail-tr { top: 58px; right: 8px; }
+  .rail-br { bottom: 8px; right: 8px; }
   .tool { width: 42px; height: 42px; }
+
   .export-wrap { grid-template-columns: 1fr; }
   .export-preview { order: -1; }
   .modal-body { padding: 14px 16px; }
   .orbit-btn { width: 52px; height: 52px; }
   .orbit-label { top: 54px; font-size: 10px; }
-  .topbar { top: 10px; }
-  .chip-btn { padding: 6px 14px 6px 10px; }
 }
+
 @media (max-width: 420px) {
   .row2 { grid-template-columns: 1fr; }
 }
