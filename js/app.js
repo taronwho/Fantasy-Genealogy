@@ -357,8 +357,8 @@
     if (!S.relationsOf(tree, id).length) disabled.push('unlink');
     if (Object.keys(tree.people).length < 2) disabled.push('link');
     if (id === tree.focusId) disabled.push('focus');
-    if (!S.canMove(tree, id, -1)) disabled.push('left');
-    if (!S.canMove(tree, id, 1)) disabled.push('right');
+    if (!S.canMove(tree, id, -1) && !canSwapSide(id, -1)) disabled.push('left');
+    if (!S.canMove(tree, id, 1) && !canSwapSide(id, 1)) disabled.push('right');
     UI.orbit.show(id, pos, { disabled: disabled });
   }
 
@@ -394,14 +394,46 @@
     }
   }
 
-  /* posun karty mezi sourozenci — po překreslení vrátíme nabídku na nové místo */
+  /* Dvojice partnerů stojící vedle sebe — u ní má posun doleva/doprava
+     význam „přehoď mě na druhou stranu partnera". */
+  function partnerPair(id) {
+    var tree = S.activeTree();
+    var L = View.layout;
+    var me = L && L.index[id];
+    if (!me) return null;
+    var found = null;
+    S.unionsOf(tree, id).forEach(function (u) {
+      u.partners.forEach(function (pid) {
+        if (found || pid === id) return;
+        var other = L.index[pid];
+        if (!other || other.gen !== me.gen) return;
+        var lo = Math.min(me.x, other.x), hi = Math.max(me.x, other.x);
+        var mezi = L.persons.some(function (n) {
+          return n.gen === me.gen && n.id !== id && n.id !== pid && n.x > lo && n.x < hi;
+        });
+        if (mezi) return;                       // nesousedí, přehazovat nedává smysl
+        found = { unionId: u.id, other: pid, left: me.x < other.x };
+      });
+    });
+    return found;
+  }
+
+  function canSwapSide(id, dir) {
+    var p = partnerPair(id);
+    return !!p && (dir < 0 ? !p.left : p.left);
+  }
+
+  /* posun karty v řadě — po překreslení vrátíme nabídku na nové místo */
   function movePerson(id, dir) {
     var tree = S.activeTree();
-    if (!S.movePerson(tree, id, dir)) {
-      UI.toast('Dál už to nejde');
+    if (S.movePerson(tree, id, dir)) { View.select(id); return; }
+    var p = partnerPair(id);
+    if (p && (dir < 0 ? !p.left : p.left)) {
+      S.setUnionSide(tree, p.unionId, dir < 0 ? id : p.other);
+      View.select(id);
       return;
     }
-    View.select(id);
+    UI.toast('Dál už to nejde');
   }
 
   function setFocus(id) {

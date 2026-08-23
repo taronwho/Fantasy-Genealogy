@@ -286,6 +286,22 @@
         }),
         u.partners.length >= 2
           ? h('button', {
+              class: 'mini', type: 'button', text: 'Prohodit strany',
+              onclick: function () {
+                var L = global.FG.View.layout;
+                var a = u.partners[0], b = u.partners[1];
+                var na = L && L.index[a], nb = L && L.index[b];
+                // vlevo bude ten, kdo teď stojí vpravo
+                var novy = (na && nb && na.x < nb.x) ? b : a;
+                if (S.setUnionSide(tree, u.id, novy)) {
+                  m.close();
+                  UI.toast(S.label(tree, novy) + ' stojí vlevo');
+                }
+              }
+            })
+          : null,
+        u.partners.length >= 2
+          ? h('button', {
               class: 'mini danger', type: 'button', text: 'Rozdělit svazek',
               onclick: function () {
                 m.close();

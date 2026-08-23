@@ -195,15 +195,26 @@
         S.unionsOf(tree, personId).forEach(function (u) {
           if (!visUnions[u.id]) return;
           u.partners.forEach(function (pid) {
-            if (pid !== personId && vis[pid] && !placed[pid] && partners.indexOf(pid) === -1) {
-              partners.push(pid);
+            if (pid !== personId && vis[pid] && !placed[pid] &&
+              !partners.some(function (q) { return q.id === pid; })) {
+              // u.left říká, kdo z dvojice stojí vlevo (ručně nastavené)
+              partners.push({
+                id: pid,
+                side: u.left === pid ? 'l' : (u.left === personId ? 'r' : '')
+              });
               unionMeta[u.id] = { owner: personId, other: pid };
             }
           });
         });
       }
-      if (partners.length >= 2) members = [partners[0], personId].concat(partners.slice(1));
-      else members = [personId].concat(partners);
+      // beze zvolené strany platí dosavadní pořadí: při dvou a více
+      // svazcích stojí první partner vlevo, ostatní vpravo
+      partners.forEach(function (q, i) {
+        if (!q.side) q.side = (i === 0 && partners.length >= 2) ? 'l' : 'r';
+      });
+      var left = [], right = [];
+      partners.forEach(function (q) { (q.side === 'l' ? left : right).push(q.id); });
+      members = left.concat([personId], right);
 
       var step = M.NODE_W + M.PARTNER_GAP;
       var total = (members.length - 1) * step;

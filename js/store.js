@@ -195,6 +195,8 @@
             if (u.start === undefined) u.start = '';
             if (u.end === undefined) u.end = '';
             if (u.note === undefined) u.note = '';
+            if (u.left === undefined) u.left = '';
+            if (u.left && u.partners.indexOf(u.left) === -1) u.left = '';
           });
           if (!t.focusId || !t.people[t.focusId]) {
             t.focusId = Object.keys(t.people)[0] || null;
@@ -444,7 +446,8 @@
         children: [],
         start: (data && data.start) || '',
         end: (data && data.end) || '',
-        note: (data && data.note) || ''
+        note: (data && data.note) || '',
+        left: ''            // kdo z dvojice stojí ve stromu vlevo
       };
       tree.unions[u.id] = u;
       return u;
@@ -545,6 +548,16 @@
       var i = list.indexOf(personId);
       if (i < 0 || list.length < 2) return null;
       return { union: u, list: list, index: i };
+    },
+
+    /* překlopí partnery na opačné strany — leftId bude stát vlevo */
+    setUnionSide: function (tree, unionId, leftId) {
+      var u = tree.unions[unionId];
+      if (!u || u.partners.indexOf(leftId) === -1 || u.left === leftId) return false;
+      this.snapshot();
+      u.left = leftId;
+      this.emit('person-update');
+      return true;
     },
 
     canMove: function (tree, personId, dir) {
