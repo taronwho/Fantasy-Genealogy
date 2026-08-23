@@ -115,6 +115,22 @@
     });
   }
 
+  /* Kam se člověk vrací: kromě části světa i to, kam byl seznam odrolovaný. */
+  function here() {
+    return {
+      section: App.section,
+      detail: App.detail,
+      scroll: pageEl ? pageEl.scrollTop : 0
+    };
+  }
+
+  function scrollTo(y) {
+    if (!pageEl) return;
+    pageEl.scrollTop = y || 0;
+    // po dokreslení (písma, obrázky) ještě jednou, ať to opravdu sedí
+    global.requestAnimationFrame(function () { pageEl.scrollTop = y || 0; });
+  }
+
   /* ---------------- rozcestník ---------------- */
 
   var App = {
@@ -124,7 +140,7 @@
 
     go: function (section, skipHistory) {
       if (!skipHistory) {
-        this.history.push({ section: this.section, detail: this.detail });
+        this.history.push(here());
         pushHistory();
       }
       this.section = section;
@@ -135,7 +151,7 @@
 
     open: function (id, skipHistory) {
       if (!skipHistory) {
-        this.history.push({ section: this.section, detail: this.detail });
+        this.history.push(here());
         pushHistory();
       }
       var e = W.get(S.activeWorld(), id);
@@ -161,7 +177,9 @@
         this.section = 'prehled';
         this.detail = null;
       }
+      remember(this.section);
       this.render();
+      scrollTo(prev ? prev.scroll : 0);
     },
 
     /* z detailu postavy rovnou do jejího rodokmenu */

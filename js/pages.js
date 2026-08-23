@@ -277,22 +277,51 @@
     return box;
   }
 
+  /* Strom podle nadřazenosti. Když má typ určené skupiny (u míst kraje,
+     města, stavby, vody…), rozdělí se podle nich každé patro — jinak by
+     na jedné hromadě stálo padesát měst vedle pěti krajů. */
   function hierarchy(type) {
     var w = world();
+    var spec = W.TYPES[type];
     var box = h('div', { class: 'hier' });
-    function level(parentId, depth) {
-      var kids = parentId === null ? W.roots(w, type) : W.childrenOf(w, type, parentId);
-      if (!kids.length) return null;
+
+    function rows(list, depth) {
       var ul = h('div', { class: 'hier-level', style: depth ? 'margin-left:18px' : '' });
-      kids.forEach(function (e) {
-        var sub = level(e.id, depth + 1);
-        ul.appendChild(h('div', { class: 'hier-item' }, [
-          entRow(e),
-          sub
-        ]));
+      list.forEach(function (e) {
+        ul.appendChild(h('div', { class: 'hier-item' }, [entRow(e), level(e.id, depth + 1)]));
       });
       return ul;
     }
+
+    function level(parentId, depth) {
+      var kids = parentId === null ? W.roots(w, type) : W.childrenOf(w, type, parentId);
+      if (!kids.length) return null;
+      if (!spec.groups || kids.length < 2) return rows(kids, depth);
+
+      var zbytek = kids.slice();
+      var out = h('div', { class: depth ? 'hier-groups' : '' });
+      spec.groups.forEach(function (g) {
+        var mine = zbytek.filter(function (e) {
+          return g.k.indexOf(e[spec.groupBy] || '') !== -1;
+        });
+        if (!mine.length) return;
+        zbytek = zbytek.filter(function (e) { return mine.indexOf(e) === -1; });
+        out.appendChild(h(depth ? 'h3' : 'h2', {
+          class: depth ? 'hier-title' : 'group-title', text: g.l
+        }));
+        out.appendChild(rows(mine, depth));
+      });
+      if (zbytek.length) {
+        if (out.childNodes.length) {
+          out.appendChild(h(depth ? 'h3' : 'h2', {
+            class: depth ? 'hier-title' : 'group-title', text: 'Ostatní'
+          }));
+        }
+        out.appendChild(rows(zbytek, depth));
+      }
+      return out;
+    }
+
     box.appendChild(level(null, 0));
     return box;
   }

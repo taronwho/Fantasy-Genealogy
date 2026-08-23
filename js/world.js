@@ -31,9 +31,10 @@
       fields: [
         { k: 'alias', l: 'Překlad názvu', t: 'text' },
         { k: 'druh', l: 'Druh', t: 'select', options: [
-          'kraj', 'město', 'vesnice', 'tvrz', 'hrad', 'věž', 'palác', 'náměstí',
-          'stavba', 'místnost', 'les', 'pohoří', 'hora', 'řeka', 'jezero',
-          'moře', 'ostrov', 'poloostrov', 'pláň', 'jiné'
+          'kraj', 'město', 'vesnice', 'hrad', 'tvrz', 'věž', 'palác', 'chrám',
+          'stavba', 'náměstí', 'místnost', 'pohoří', 'hora', 'pláň', 'niva',
+          'údolí', 'les', 'ostrov', 'poloostrov', 'řeka', 'jezero', 'moře',
+          'oceán', 'záliv', 'jiné'
         ] },
         { k: 'parent', l: 'Leží v', t: 'ref', to: 'misto' },
         { k: 'narod', l: 'Náleží národu', t: 'ref', to: 'narod' },
@@ -41,7 +42,18 @@
         { k: 'note', l: 'Popis', t: 'long' }
       ],
       tree: 'parent',
-      groupBy: 'druh'
+      groupBy: 'druh',
+      // v seznamu se místa řadí po skupinách, ne podle abecedy druhů
+      groups: [
+        { l: 'Kraje a země', k: ['kraj'] },
+        { l: 'Města a vesnice', k: ['město', 'vesnice'] },
+        { l: 'Stavby', k: ['hrad', 'tvrz', 'věž', 'palác', 'chrám', 'stavba', 'náměstí'] },
+        { l: 'Místnosti', k: ['místnost'] },
+        { l: 'Hory, pláně a údolí', k: ['pohoří', 'hora', 'pláň', 'niva', 'údolí'] },
+        { l: 'Lesy', k: ['les'] },
+        { l: 'Ostrovy a poloostrovy', k: ['ostrov', 'poloostrov'] },
+        { l: 'Vody', k: ['řeka', 'jezero', 'moře', 'oceán', 'záliv'] }
+      ]
     },
     narod: {
       label: 'Národ', plural: 'Národy', article: 'Nový národ',
