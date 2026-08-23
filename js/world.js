@@ -214,19 +214,23 @@
         if (e.id === id) continue;
         var spec = TYPES[e.type];
         if (!spec) continue;
-        var why = null;
+        var hit = null;
         spec.fields.forEach(function (f) {
-          if (why) return;
-          if (f.t === 'ref' && e[f.k] === id) why = f.l;
-          else if (f.t === 'refs' && Array.isArray(e[f.k]) && e[f.k].indexOf(id) !== -1) why = f.l;
-          else if ((f.t === 'long' || f.t === 'text') && name) {
+          if (hit) return;
+          if (f.t === 'ref' && e[f.k] === id) hit = { field: f.k, why: f.l };
+          else if (f.t === 'refs' && Array.isArray(e[f.k]) && e[f.k].indexOf(id) !== -1) {
+            hit = { field: f.k, why: f.l };
+          } else if ((f.t === 'long' || f.t === 'text') && name) {
             var links = World.linksIn(e[f.k]);
             for (var i = 0; i < links.length; i++) {
-              if (norm(links[i]) === name) { why = 'zmínka v poli ' + f.l.toLowerCase(); break; }
+              if (norm(links[i]) === name) {
+                hit = { field: null, why: 'zmínka v poli ' + f.l.toLowerCase() };
+                break;
+              }
             }
           }
         });
-        if (why) out.push({ entity: e, why: why });
+        if (hit) out.push({ entity: e, field: hit.field, why: hit.why });
       }
       return out.sort(function (a, b) {
         return (a.entity.name || '').localeCompare(b.entity.name || '', 'cs');

@@ -31,7 +31,7 @@
     return h('span', { class: 'type-chip t-' + type, text: spec ? spec.label : type });
   }
 
-  function entRow(e, meta) {
+  function entRow(e, meta, contextId) {
     var row = h('button', {
       class: 'ent-row', type: 'button',
       onclick: function () { global.FG.App.open(e.id); }
@@ -40,16 +40,17 @@
         h('span', { class: 'ent-name', text: (e.name || '').trim() || 'Bez názvu' }),
         e.alias ? h('span', { class: 'ent-alias', text: e.alias }) : null
       ]),
-      h('span', { class: 'ent-meta', text: meta || defaultMeta(e) })
+      h('span', { class: 'ent-meta', text: meta || defaultMeta(e, contextId) })
     ]);
     return row;
   }
 
-  function defaultMeta(e) {
+  /* contextId = záznam, na jehož stránce řádek stojí; co už víme, neopakujeme */
+  function defaultMeta(e, contextId) {
     var w = world();
     if (e.type === 'postava') {
       var life = S.lifespan(e);
-      var place = e.misto ? W.label(w, e.misto) : '';
+      var place = (e.misto && e.misto !== contextId) ? W.label(w, e.misto) : '';
       return [life, place].filter(Boolean).join('  ·  ');
     }
     if (e.type === 'misto') {
@@ -60,6 +61,46 @@
     }
     if (e.type === 'narod') return e.alias ? '' : '';
     return '';
+  }
+
+  /* Zpětné odkazy nemají smysl jako jedna hromada — rozdělíme je podle
+     toho, čím k záznamu patří, a pojmenujeme lidsky. */
+  var BACK_TITLES = {
+    'postava:narod': 'Postavy tohoto národa',
+    'misto:narod': 'Místa tohoto národa',
+    'postava:misto': 'Kdo zde pobývá',
+    'udalost:mista': 'Co se zde stalo',
+    'udalost:postavy': 'Události',
+    'narod:parent': 'Součásti',
+    'misto:parent': 'Uvnitř',
+    'text': 'Zmínky v textech'
+  };
+  var BACK_ORDER = ['postava', 'misto', 'narod', 'udalost', 'zapis'];
+
+  function backGroups(w, entity) {
+    var groups = [];
+    var byKey = {};
+    W.backlinks(w, entity.id).forEach(function (b) {
+      var spec = W.TYPES[b.entity.type];
+      // co stránka ukazuje jinde (oddíl „Uvnitř"), sem znovu netaháme
+      if (b.field && spec && spec.tree === b.field) return;
+      var key = b.field ? (b.entity.type + ':' + b.field) : 'text';
+      if (!byKey[key]) {
+        var title = BACK_TITLES[key];
+        if (!title) {
+          title = b.field
+            ? (spec ? spec.plural : 'Další záznamy')
+            : 'Zmínky v textech';
+        }
+        byKey[key] = {
+          key: key, title: title, items: [],
+          rank: b.field ? BACK_ORDER.indexOf(b.entity.type) : 90
+        };
+        groups.push(byKey[key]);
+      }
+      byKey[key].items.push(b);
+    });
+    return groups.sort(function (a, b) { return a.rank - b.rank; });
   }
 
   function emptyNote(text) {
@@ -468,16 +509,31 @@
       }
     }
 
-    // zpětné odkazy
-    var back = W.backlinks(w, e.id);
-    if (back.length) {
-      page.appendChild(h('h2', { class: 'sec-title', text: 'Zmíněno v' }));
-      var bl = h('div', { class: 'card-list' });
-      back.forEach(function (b) {
-        bl.appendChild(entRow(b.entity, b.why));
-      });
-      page.appendChild(bl);
-    }
+    // co k záznamu patří — po skupinách
+    backGroups(w, e).forEach(function (g) {
+      page.appendChild(h('h2', {
+        class: 'sec-title',
+        text: g.title + (g.items.length > 3 ? '  ·  ' + g.items.length : '')
+      }));
+      var list = h('div', { class: 'card-list' });
+      var LIMIT = 12;
+      function fill(all) {
+        list.textContent = '';
+        var items = all ? g.items : g.items.slice(0, LIMIT);
+        items.forEach(function (b) {
+          list.appendChild(entRow(b.entity, g.key === 'text' ? b.why : null, e.id));
+        });
+        if (!all && g.items.length > LIMIT) {
+          list.appendChild(h('button', {
+            class: 'more-row', type: 'button',
+            text: 'Zobrazit všech ' + g.items.length + ' →',
+            onclick: function () { fill(true); }
+          }));
+        }
+      }
+      fill(false);
+      page.appendChild(list);
+    });
 
     page.appendChild(h('div', { class: 'detail-foot' }, [
       h('button', {
