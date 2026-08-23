@@ -15,6 +15,11 @@ proklikatelné. Běží celá v prohlížeči, nic se nikam neodesílá.
 - **Jeden záznam, jedno místo.** Postava, místo, národ, událost i volný zápis
   jsou stejný druh záznamu — liší se jen tím, co u nich vyplňujete. Postava v
   rodokmenu a postava v seznamu je jeden a tentýž záznam.
+- **Postavy patří do světa, ne do jednoho stromu.** Kteroukoli postavu jde
+  zařadit do rodokmenu (tlačítkem *Do rodokmenu* na její kartě) a při přidávání
+  rodičů, partnerů či dětí se vybírá ze všech postav světa — ne jen z těch,
+  které v daném stromu už jsou. Úprava osoby ve stromu otevírá celý její
+  záznam včetně vzhledu, povahy a národa.
 - **Vazby mezi vším.** U postavy se vybírá národ a místo pobytu, u místa
   nadřazené místo (kraj → město → stavba → místnost) a národ, u události místa
   i postavy, kterých se týká. Kliknutím na kterýkoli odkaz se přesunete dál.

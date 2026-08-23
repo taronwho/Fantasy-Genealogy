@@ -208,18 +208,18 @@
 
     /* ---------- konkrétní dialogy ---------- */
 
+    /* Úprava osoby z rodokmenu = úprava celého záznamu ve světě,
+       navíc s obdobími jejích svazků. */
     editPerson: function (tree, id) {
       var S = global.FG.Store;
       var p = tree.people[id];
       if (!p) return;
-      var form = this.personForm(p);
-      var content = h('div', {}, [form]);
 
-      // období jednotlivých svazků — každý je plnohodnotný a má vlastní roky
       var rows = [];
+      var extra = null;
       var unions = S.unionsOf(tree, id);
       if (unions.length) {
-        var box = h('div', { class: 'union-edit' }, [
+        extra = h('div', { class: 'union-edit' }, [
           h('h3', { class: 'form-heading', text: 'Svazky' })
         ]);
         unions.forEach(function (u) {
@@ -227,7 +227,7 @@
           var from = h('input', { type: 'text', value: u.start || '', placeholder: 'od' });
           var to = h('input', { type: 'text', value: u.end || '', placeholder: 'do' });
           rows.push({ id: u.id, from: from, to: to });
-          box.appendChild(h('div', { class: 'union-row' }, [
+          extra.appendChild(h('div', { class: 'union-row' }, [
             h('span', {
               class: 'union-who',
               text: other ? S.label(tree, other) : 'Bez partnera'
@@ -235,34 +235,23 @@
             from, to
           ]));
         });
-        box.appendChild(h('p', {
+        extra.appendChild(h('p', {
           class: 'dialog-text small',
           text: 'Roky, kdy svazek trval. Poznámku k němu přidáte klepnutím ' +
             'na kosočtverec mezi kartami ve stromu.'
         }));
-        content.appendChild(box);
       }
 
-      this.modal({
-        title: 'Upravit osobu',
-        content: content,
-        buttons: [
-          { label: 'Zrušit' },
-          {
-            label: 'Uložit', kind: 'primary',
-            action: function () {
-              S.batch(function () {
-                S.updatePerson(tree, id, form.read());
-                rows.forEach(function (r) {
-                  S.updateUnion(tree, r.id, {
-                    start: r.from.value.trim(), end: r.to.value.trim()
-                  });
-                });
-              });
-              UI.toast('Uloženo');
-            }
-          }
-        ]
+      global.FG.Pages.editEntity(id, 'postava', {
+        title: 'Upravit postavu',
+        extra: extra,
+        onSave: function () {
+          rows.forEach(function (r) {
+            S.updateUnion(tree, r.id, {
+              start: r.from.value.trim(), end: r.to.value.trim()
+            });
+          });
+        }
       });
     },
 
@@ -333,46 +322,57 @@
 
     /* ---------- výběr osoby, která už ve stromu je ---------- */
 
+    /* Výběr postavy — nabízí všechny postavy světa, nejen ty, které
+       už v tomto rodokmenu jsou. Vybraná postava se do stromu doplní. */
     picker: function (tree, opts) {
       opts = opts || {};
       var S = global.FG.Store;
+      var W = global.FG.World;
+      var world = S.activeWorld();
       var exclude = opts.exclude || [];
       var selected = null;
       var search = h('input', { type: 'search', placeholder: 'Hledat jméno…' });
       var list = h('div', { class: 'pick-list' });
 
+      function where(id) {
+        if (tree.people[id]) return 'v tomto rodokmenu';
+        var other = S.treeOf(world, id);
+        if (other) return 'v rodokmenu ' + other.name;
+        return 'zatím mimo rodokmeny';
+      }
+
       function draw() {
         list.textContent = '';
         var q = search.value.trim().toLowerCase();
-        var ids = Object.keys(tree.people).filter(function (pid) {
-          return exclude.indexOf(pid) === -1;
+        var items = W.all(world, 'postava').filter(function (e) {
+          return exclude.indexOf(e.id) === -1;
         });
         if (q) {
-          ids = ids.filter(function (pid) {
-            var p = tree.people[pid];
-            return ((p.name || '') + ' ' + (p.note || '')).toLowerCase().indexOf(q) !== -1;
+          items = items.filter(function (e) {
+            return ((e.name || '') + ' ' + (e.alias || '') + ' ' + (e.note || ''))
+              .toLowerCase().indexOf(q) !== -1;
           });
         }
-        ids.sort(function (a, b) {
-          return S.label(tree, a).localeCompare(S.label(tree, b), 'cs');
-        });
-        if (!ids.length) {
+        if (!items.length) {
           list.appendChild(h('div', {
             class: 'pick-empty',
-            text: q ? 'Nic nenalezeno.' : (opts.empty || 'Ve stromu není jiná osoba.')
+            text: q ? 'Nic nenalezeno.' : (opts.empty || 'Ve světě zatím není jiná postava.')
           }));
         }
-        ids.slice(0, 150).forEach(function (pid) {
+        items.slice(0, 150).forEach(function (e) {
           list.appendChild(h('button', {
-            class: 'pick' + (pid === selected ? ' on' : ''), type: 'button',
+            class: 'pick' + (e.id === selected ? ' on' : ''), type: 'button',
             onclick: function () {
-              selected = pid;
+              selected = e.id;
               draw();
-              if (opts.onPick) opts.onPick(pid);
+              if (opts.onPick) opts.onPick(e.id);
             }
           }, [
-            h('span', { class: 'pick-name', text: S.label(tree, pid) }),
-            h('span', { class: 'pick-meta', text: S.lifespan(tree.people[pid]) })
+            h('span', { class: 'pick-name', text: (e.name || '').trim() || 'Bez jména' }),
+            h('span', {
+              class: 'pick-meta',
+              text: [S.lifespan(e), where(e.id)].filter(Boolean).join('  ·  ')
+            })
           ]));
         });
       }
@@ -380,7 +380,7 @@
       draw();
 
       var wrap = h('div', { class: 'picker' }, [
-        UI.field(opts.label || 'Osoba ve stromu', search),
+        UI.field(opts.label || 'Postava ve světě', search),
         list
       ]);
       wrap.selected = function () { return selected; };
@@ -609,7 +609,7 @@
       var relation = 'partner';
       var pick = this.picker(tree, {
         exclude: [id],
-        label: 'Vyberte osobu',
+        label: 'Vyberte postavu',
         empty: 'Ve stromu zatím není jiná postava.'
       });
 

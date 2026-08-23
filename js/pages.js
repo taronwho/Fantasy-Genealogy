@@ -389,11 +389,16 @@
         e.alias ? h('p', { class: 'detail-alias', text: e.alias }) : null
       ]),
       h('div', { class: 'page-actions' }, [
-        e.type === 'postava' && S.treeOf(w, e.id)
-          ? h('button', {
-              class: 'btn ghost', type: 'button', text: 'V rodokmenu',
-              onclick: function () { global.FG.App.showInTree(e.id); }
-            })
+        e.type === 'postava'
+          ? (S.treeOf(w, e.id)
+              ? h('button', {
+                  class: 'btn ghost', type: 'button', text: 'V rodokmenu',
+                  onclick: function () { global.FG.App.showInTree(e.id); }
+                })
+              : h('button', {
+                  class: 'btn ghost', type: 'button', text: 'Do rodokmenu',
+                  onclick: function () { Pages.addToTree(e.id); }
+                }))
           : null,
         h('button', {
           class: 'btn ghost', type: 'button', text: 'Upravit',
@@ -534,12 +539,12 @@
 
     /* ---------- úpravy ---------- */
 
-    editEntity: function (id, type) {
+    editEntity: function (id, type, opts) {
+      opts = opts || {};
       var w = world();
       var e = id ? W.get(w, id) : null;
       type = e ? e.type : type;
       var spec = W.TYPES[type];
-      var draft = {};
       var name = h('input', { type: 'text', value: e ? e.name : '', placeholder: 'Název' });
       var content = h('div', {}, [UI.field('Název', name)]);
       var inputs = {};
@@ -575,8 +580,10 @@
         content.appendChild(UI.field(f.l, el.field || el));
       });
 
+      if (opts.extra) content.appendChild(opts.extra);
+
       UI.modal({
-        title: e ? 'Upravit záznam' : spec.article,
+        title: opts.title || (e ? 'Upravit záznam' : spec.article),
         wide: true,
         content: content,
         buttons: [
@@ -586,14 +593,15 @@
             action: function () {
               var nm = name.value.trim();
               if (!nm) { UI.toast('Vyplňte název.', 'warn'); return false; }
-              S.snapshot();
               var target = e || W.create(world(), type, {});
-              target.name = nm;
-              spec.fields.forEach(function (f) {
-                var el = inputs[f.k];
-                target[f.k] = el.read ? el.read() : el.value;
+              S.batch(function () {
+                target.name = nm;
+                spec.fields.forEach(function (f) {
+                  var el = inputs[f.k];
+                  target[f.k] = el.read ? el.read() : el.value;
+                });
+                if (opts.onSave) opts.onSave(target);
               });
-              S.emit('entity-save');
               if (!e) global.FG.App.open(target.id);
               UI.toast('Uloženo');
             }
@@ -676,6 +684,81 @@
       box.read = function () { return multi ? chosen : (chosen[0] || ''); };
       box.field = box;
       return box;
+    },
+
+    /* zařazení postavy do některého z rodokmenů */
+    addToTree: function (personId) {
+      var w = world();
+      var m;
+      var list = h('div', { class: 'card-list' });
+      S.trees().forEach(function (t) {
+        list.appendChild(h('button', {
+          class: 'ent-row', type: 'button',
+          onclick: function () { m.close(); put(t); }
+        }, [
+          h('span', { class: 'ent-main' }, [
+            h('span', { class: 'ent-name', text: t.name })
+          ]),
+          h('span', {
+            class: 'ent-meta',
+            text: Object.keys(t.people).length + ' osob'
+          })
+        ]));
+      });
+
+      function put(tree) {
+        S.batch(function () {
+          tree.people[personId] = W.get(w, personId);
+          if (!tree.focusId || !tree.people[tree.focusId]) tree.focusId = personId;
+          w.activeTreeId = tree.id;
+        });
+        UI.toast('Přidáno do rodokmenu ' + tree.name);
+        global.FG.App.showInTree(personId);
+      }
+
+      m = UI.modal({
+        title: 'Do kterého rodokmenu?',
+        content: h('div', {}, [
+          h('p', {
+            class: 'dialog-text',
+            text: 'Postava se do stromu vloží jako samostatná karta. ' +
+              'Vazby k rodičům, partnerům a dětem pak přidáte přímo ve stromu.'
+          }),
+          list,
+          h('div', { class: 'manager-tools' }, [
+            h('button', {
+              class: 'btn ghost', type: 'button', text: '+ Nový rodokmen',
+              onclick: function () {
+                var input = h('input', { type: 'text', placeholder: 'Název rodu' });
+                m.close();
+                UI.modal({
+                  title: 'Nový rodokmen',
+                  content: UI.field('Název', input),
+                  buttons: [
+                    { label: 'Zrušit' },
+                    {
+                      label: 'Založit', kind: 'primary',
+                      action: function () {
+                        var t = S.createTree(input.value.trim() || 'Nový rod');
+                        // nový strom zakládá prázdnou postavu, tu nepotřebujeme
+                        Object.keys(t.people).forEach(function (pid) {
+                          var p = t.people[pid];
+                          if (!p.name && !p.birth && !p.death) {
+                            delete t.people[pid];
+                            W.remove(world(), pid);
+                          }
+                        });
+                        put(t);
+                      }
+                    }
+                  ]
+                });
+              }
+            })
+          ])
+        ]),
+        buttons: [{ label: 'Zrušit' }]
+      });
     },
 
     createNamed: function (name) {

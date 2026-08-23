@@ -582,6 +582,11 @@
     link: function (tree, personId, otherId, relation, unionId, unionData) {
       if (personId === otherId) return 'Nelze propojit osobu se sebou samou.';
       this.snapshot();
+      // postava ze světa, která v tomto rodokmenu ještě nebyla, se do něj doplní
+      var world = this.activeWorld();
+      if (world && world.entities[otherId] && !tree.people[otherId]) {
+        tree.people[otherId] = world.entities[otherId];
+      }
       var msg = null;
       if (relation === 'partner') {
         var exists = this.unionsOf(tree, personId).some(function (u) {

@@ -20,8 +20,8 @@
         { k: 'birth', l: 'Narození', t: 'text', half: true },
         { k: 'death', l: 'Úmrtí', t: 'text', half: true },
         { k: 'vzhled', l: 'Vzhled', t: 'long' },
-        { k: 'povaha', l: 'Povaha a další', t: 'long' },
-        { k: 'note', l: 'Poznámky', t: 'long' }
+        { k: 'povaha', l: 'Povahové vlastnosti', t: 'long' },
+        { k: 'note', l: 'Další informace', t: 'long' }
       ],
       groupBy: 'narod'
     },
