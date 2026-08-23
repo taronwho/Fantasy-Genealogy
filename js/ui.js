@@ -725,7 +725,11 @@
         return;
       }
       var content = h('div', {}, [
-        h('p', { class: 'dialog-text', text: 'Vyberte vazbu, kterou chcete zrušit. Osoby zůstanou ve stromu.' })
+        h('p', {
+          class: 'dialog-text',
+          text: 'Vyberte vazbu, kterou chcete zrušit. Osoby zůstanou ve stromu. ' +
+            'Odpojení rodiče se týká jen této osoby — sourozencům rodič zůstane.'
+        })
       ]);
       var m;
       var list = h('div', { class: 'pick-list' });
@@ -734,7 +738,17 @@
           class: 'pick', type: 'button',
           onclick: function () {
             S.unlink(tree, id, r);
-            UI.toast('Vazba zrušena');
+            if (r.kind === 'parent') {
+              // odpojení rodiče se týká jen této osoby, sourozencům zůstává
+              var zbyli = S.parentsOf(tree, id).map(function (x) {
+                return S.label(tree, x);
+              });
+              UI.toast(zbyli.length
+                ? S.label(tree, id) + ' — rodič už jen ' + zbyli.join(' a ')
+                : S.label(tree, id) + ' je teď bez rodičů');
+            } else {
+              UI.toast('Vazba zrušena');
+            }
             m.close();
           }
         }, [h('span', { class: 'pick-name', text: r.label }),

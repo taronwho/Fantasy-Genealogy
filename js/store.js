@@ -726,15 +726,32 @@
       return out;
     },
 
+    /* svazek s přesně těmito partnery — buď už existuje, nebo vznikne */
+    unionWith: function (tree, partners) {
+      var hledany = partners.slice().sort().join('|');
+      for (var k in tree.unions) {
+        var u = tree.unions[k];
+        if (u.partners.slice().sort().join('|') === hledany) return u;
+      }
+      return this.newUnion(tree, partners);
+    },
+
     unlink: function (tree, personId, rel) {
       this.snapshot();
       if (rel.kind === 'parent') {
         var p = tree.people[personId];
         var u = tree.unions[p.parentUnionId];
         if (u) {
-          if (u.partners.length > 1) {
-            // odpojíme jen konkrétního rodiče
-            u.partners = u.partners.filter(function (x) { return x !== rel.targetId; });
+          var zbyli = u.partners.filter(function (x) { return x !== rel.targetId; });
+          if (zbyli.length === u.partners.length) {
+            // takový rodič tam není, není co odpojovat
+          } else if (zbyli.length) {
+            // Svazek patří i sourozencům, proto se nemění — místo toho
+            // přejde jen tato osoba pod zbylého rodiče.
+            u.children = u.children.filter(function (c) { return c !== personId; });
+            var cil = this.unionWith(tree, zbyli);
+            p.parentUnionId = cil.id;
+            if (cil.children.indexOf(personId) === -1) cil.children.push(personId);
           } else {
             u.children = u.children.filter(function (c) { return c !== personId; });
             p.parentUnionId = null;
