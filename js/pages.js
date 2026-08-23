@@ -406,6 +406,7 @@
     var dl = h('div', { class: 'fields' });
     spec.fields.forEach(function (f) {
       if (f.k === 'note' || f.t === 'long') return;
+      if (f.k === 'alias' && e.alias) return;      // přídomek už stojí pod nadpisem
       var val = e[f.k];
       if (f.t === 'ref') {
         if (!val || !W.get(w, val)) return;
