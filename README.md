@@ -1,14 +1,33 @@
 # Kroniky rodů
 
-Webová aplikace pro tvorbu **rodokmenů postav ve fantasy světech**. Běží celá
-v prohlížeči, nic se nikam neodesílá a hotový strom se dá uložit jako obrázek
-ve formátu A5 nebo A4 — tak, aby se dal vložit do knihy nebo herního manuálu.
+Webová aplikace pro stavbu **celého fantasy světa**: postavy, místa, národy,
+události, kalendář a rodokmeny — všechno na jednom místě, provázané a
+proklikatelné. Běží celá v prohlížeči, nic se nikam neodesílá.
 
 | Aplikace | Vyexportovaná stránka |
 | --- | --- |
 | ![Aplikace](docs/ukazka-aplikace.jpg) | ![Export](docs/ukazka-export.jpg) |
 
 ## Co aplikace umí
+
+### Svět
+
+- **Jeden záznam, jedno místo.** Postava, místo, národ, událost i volný zápis
+  jsou stejný druh záznamu — liší se jen tím, co u nich vyplňujete. Postava v
+  rodokmenu a postava v seznamu je jeden a tentýž záznam.
+- **Vazby mezi vším.** U postavy se vybírá národ a místo pobytu, u místa
+  nadřazené místo (kraj → město → stavba → místnost) a národ, u události místa
+  i postavy, kterých se týká. Kliknutím na kterýkoli odkaz se přesunete dál.
+- **Odkazy v textu.** Kdekoli v poznámce stačí napsat `[[Jméno]]` a vznikne
+  odkaz; když záznam ještě neexistuje, aplikace nabídne jeho založení.
+- **Zmíněno v.** Každý záznam ukazuje, odkud všude na něj vede odkaz — takže
+  z města vidíte jeho obyvatele, z národa jeho města, z postavy události.
+- **Časová osa** událostí seskupená po epochách a **kalendář světa** s měsíci,
+  svátky a zvláštnostmi.
+- **Hledání napříč světem** (klávesa F) přes jména, přídomky i texty.
+- **Víc světů** vedle sebe, záloha a obnova celého světa do souboru JSON.
+
+### Rodokmeny
 
 - **Neomezeně rodů** — pro každou postavu vlastní strom, mezi stromy se
   přepíná v nabídce nahoře.
@@ -98,17 +117,24 @@ přes **Nastavení → Zálohovat vše (JSON)**.
 ```
 index.html        kostra stránky a lišty
 css/styles.css    vzhled (dva motivy: Pergamen, Inkoust)
-js/store.js       datový model, vazby mezi osobami, ukládání, zpět/znovu
+js/world.js       entity světa, jejich typy, vazby, hledání a zpětné odkazy
+js/store.js       světy, rodokmeny, vazby mezi osobami, ukládání, zpět/znovu
 js/layout.js      výpočet rozvržení stromu (viditelnost, rozmístění, rozestupy)
 js/view.js        vykreslení do SVG, posun, přiblížení, výběr karet
-js/ui.js          dialogy, formuláře, kruhová nabídka, správa rodů
+js/ui.js          dialogy, formuláře, kruhová nabídka, správa světů a rodů
+js/pages.js       stránky světa: seznamy, detail, časová osa, kalendář
 js/export.js      vykreslení stránky kroniky do obrázku (pergamen, rám, strom)
 js/files.js       ukládání souborů (odkaz ke stažení, případně hostitel)
 js/app.js         propojení všech částí, klávesové zkratky, ukázkový rod
 build.js          sestavení jednosouborové verze do dist/
 ```
 
-Datový model stojí na *svazcích*: osoba (`person`) má jméno a údaje, svazek
+Svět je mapa entit `{ id, type, name, … }`; typ určuje, jaká pole se u záznamu
+zobrazují a kam smí odkazovat (`World.TYPES`). Přidat další druh záznamu proto
+znamená doplnit jeden popis typu — seznam, detail i formulář se z něj poskládají
+samy.
+
+Rodokmeny stojí na *svazcích*: osoba (`person`) má jméno a údaje, svazek
 (`union`) drží partnery a jejich děti. Rodičovská vazba je odkaz dítěte na
 svazek. Díky tomu jde bez problémů podchytit druhá manželství, nevlastní
 sourozence i sňatky mezi větvemi téhož rodu.

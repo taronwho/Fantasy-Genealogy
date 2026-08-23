@@ -37,7 +37,15 @@
     minus: '<path d="M5 12h14"/>',
     fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
-    undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h9a6 6 0 010 12h-3"/>'
+    undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h9a6 6 0 010 12h-3"/>',
+    person: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.9 3.1-6.4 7-6.4s7 2.5 7 6.4"/>',
+    world: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.3 3.6 5.2 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.2-3.6-8.5S9.6 5.8 12 3.5z"/>',
+    home: '<path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10v9h11v-9"/>',
+    place: '<path d="M12 21s6.5-6 6.5-10.5A6.5 6.5 0 005.5 10.5C5.5 15 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.4"/>',
+    flag: '<path d="M6 21V4"/><path d="M6 4.5h11l-2 3.5 2 3.5H6"/>',
+    event: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/>',
+    moon: '<path d="M20.5 14.8A8.6 8.6 0 019.2 3.5a8.6 8.6 0 1011.3 11.3z"/>',
+    book: '<path d="M5 4.5h6.5a2.5 2.5 0 012.5 2.5v13a2 2 0 00-2-2H5z"/><path d="M19 4.5h-4.5a2.5 2.5 0 00-2.5 2.5v13a2 2 0 012-2H19z"/>'
   };
 
   function icon(name, size) {
@@ -681,7 +689,7 @@
         var list = h('div', { class: 'tree-list' });
         S.trees().forEach(function (t) {
           var st = S.stats(t);
-          var active = t.id === S.state.activeTreeId;
+          var active = t.id === S.activeWorld().activeTreeId;
           var row = h('div', { class: 'tree-row' + (active ? ' on' : '') }, [
             h('button', {
               class: 'tree-open', type: 'button',
@@ -736,9 +744,163 @@
       m = this.modal({ title: 'Rody a stromy', wide: true, content: content, buttons: [{ label: 'Zavřít' }] });
     },
 
+    /* ---------- světy ---------- */
+
+    worldManager: function () {
+      var S = global.FG.Store;
+      var W = global.FG.World;
+      var m;
+      var content = h('div', {});
+
+      function draw() {
+        content.textContent = '';
+        var list = h('div', { class: 'tree-list' });
+        S.worlds().forEach(function (w) {
+          var active = w.id === S.state.activeWorldId;
+          list.appendChild(h('div', { class: 'tree-row' + (active ? ' on' : '') }, [
+            h('button', {
+              class: 'tree-open', type: 'button',
+              onclick: function () {
+                S.setActiveWorld(w.id);
+                global.FG.App.go('prehled');
+                m.close();
+              }
+            }, [
+              h('span', { class: 'tree-name', text: w.name }),
+              h('span', {
+                class: 'tree-meta',
+                text: W.count(w, 'postava') + ' postav · ' + W.count(w, 'misto') +
+                  ' míst · ' + Object.keys(w.trees).length + ' rodokmenů'
+              })
+            ]),
+            h('div', { class: 'tree-actions' }, [
+              h('button', {
+                class: 'mini', type: 'button', text: 'Přejmenovat',
+                onclick: function () {
+                  var input = h('input', { type: 'text', value: w.name, maxlength: '60' });
+                  UI.modal({
+                    title: 'Přejmenovat svět',
+                    content: UI.field('Název', input),
+                    buttons: [
+                      { label: 'Zrušit' },
+                      {
+                        label: 'Uložit', kind: 'primary',
+                        action: function () {
+                          S.renameWorld(w.id, input.value.trim() || 'Svět bez jména');
+                          draw();
+                        }
+                      }
+                    ]
+                  });
+                }
+              }),
+              h('button', {
+                class: 'mini danger', type: 'button', text: 'Smazat',
+                onclick: function () {
+                  m.close();
+                  UI.confirm('Smazat svět „' + w.name + '"?',
+                    'Zmizí všechny jeho postavy, místa, události i rodokmeny. ' +
+                    'Vrátit lze pomocí Ctrl+Z.',
+                    function () { S.deleteWorld(w.id); UI.toast('Svět smazán'); }, 'Smazat');
+                }
+              })
+            ])
+          ]));
+        });
+        content.appendChild(list);
+        content.appendChild(h('div', { class: 'manager-tools' }, [
+          h('button', {
+            class: 'btn primary', type: 'button', text: '+ Nový svět',
+            onclick: function () {
+              var input = h('input', { type: 'text', value: '', placeholder: 'Název světa' });
+              UI.modal({
+                title: 'Nový svět',
+                content: UI.field('Název', input),
+                buttons: [
+                  { label: 'Zrušit' },
+                  {
+                    label: 'Založit', kind: 'primary',
+                    action: function () {
+                      S.createWorld(input.value.trim() || 'Nový svět');
+                      global.FG.App.go('prehled');
+                      m.close();
+                    }
+                  }
+                ]
+              });
+            }
+          }),
+          h('button', {
+            class: 'btn ghost', type: 'button', text: 'Zálohovat vše (JSON)',
+            onclick: function () { UI.downloadJSON(); }
+          }),
+          h('button', {
+            class: 'btn ghost', type: 'button', text: 'Načíst ze zálohy',
+            onclick: function () { UI.importDialog(function () { draw(); }); }
+          })
+        ]));
+      }
+      draw();
+      m = this.modal({ title: 'Světy', wide: true, content: content, buttons: [{ label: 'Zavřít' }] });
+    },
+
+    /* hledání napříč celým světem */
+    worldSearch: function () {
+      var S = global.FG.Store;
+      var W = global.FG.World;
+      var world = S.activeWorld();
+      var input = h('input', { type: 'search', placeholder: 'Jméno, místo, událost, text…' });
+      var list = h('div', { class: 'pick-list' });
+      var m;
+
+      function draw() {
+        list.textContent = '';
+        var q = input.value.trim();
+        var res = q ? W.search(world, q) : W.all(world).slice(0, 30);
+        if (!res.length) {
+          list.appendChild(h('div', { class: 'pick-empty', text: 'Nic nenalezeno.' }));
+        }
+        res.slice(0, 60).forEach(function (e) {
+          var tree = e.type === 'postava' ? S.treeOf(world, e.id) : null;
+          var inTree = tree && global.FG.App.section === 'rodokmeny' &&
+            tree.id === world.activeTreeId;
+          list.appendChild(h('button', {
+            class: 'pick', type: 'button',
+            onclick: function () {
+              m.close();
+              if (inTree) {
+                if (global.FG.View.layout.index[e.id]) {
+                  global.FG.View.centerOn(e.id, true, true);
+                  global.FG.View.select(e.id);
+                } else {
+                  S.setFocus(tree, e.id);
+                }
+              } else {
+                global.FG.App.open(e.id);
+              }
+            }
+          }, [
+            h('span', { class: 'pick-name', text: (e.name || '').trim() || 'Bez názvu' }),
+            h('span', {
+              class: 'pick-meta',
+              text: (W.TYPES[e.type] ? W.TYPES[e.type].label : '') +
+                (e.alias ? '  ·  ' + e.alias : '')
+            })
+          ]));
+        });
+      }
+      input.addEventListener('input', draw);
+      draw();
+      m = this.modal({
+        title: 'Hledat ve světě',
+        content: h('div', {}, [this.field('Hledat', input), list]),
+        buttons: [{ label: 'Zavřít' }]
+      });
+    },
+
     renameTreeDialog: function (id, after) {
       var S = global.FG.Store;
-      var t = S.state.trees[id];
+      var t = S.activeWorld().trees[id];
       var input = h('input', { type: 'text', value: t.name, maxlength: '60' });
       this.modal({
         title: 'Přejmenovat rod',
@@ -1071,6 +1233,7 @@
       root: null, id: null,
       items: [
         { a: 'edit', l: 'Upravit', i: 'edit' },
+        { a: 'detail', l: 'Karta', i: 'book' },
         { a: 'parents', l: 'Přidat rodiče', i: 'parents' },
         { a: 'partner', l: 'Přidat partnera', i: 'partner' },
         { a: 'child', l: 'Přidat dítě', i: 'child' },

@@ -2,11 +2,22 @@
 (function (global) {
   'use strict';
 
-  var S, UI, View, Layout;
-  var stage, orbitHost;
+  var S, UI, View, Layout, W, Pages;
+  var stage, pageEl, treeSection;
   var currentLayout = null;
   var focusHistory = [];
   var pendingView = 'fit';
+
+  var SECTIONS = [
+    { id: 'prehled', label: 'Přehled', icon: 'home' },
+    { id: 'postava', label: 'Postavy', icon: 'person' },
+    { id: 'misto', label: 'Místa', icon: 'place' },
+    { id: 'narod', label: 'Národy', icon: 'flag' },
+    { id: 'udalost', label: 'Události', icon: 'event' },
+    { id: 'kalendar', label: 'Kalendář', icon: 'moon' },
+    { id: 'zapis', label: 'Zápisy', icon: 'book' },
+    { id: 'rodokmeny', label: 'Rodokmeny', icon: 'trees' }
+  ];
 
   var UP_OPTIONS = [
     { v: Infinity, big: '∞', small: 'vše' },
@@ -24,21 +35,26 @@
 
   function q(sel) { return document.querySelector(sel); }
 
+  /* ---------------- start ---------------- */
+
   function boot() {
-    S = global.FG.Store; UI = global.FG.UI; View = global.FG.View; Layout = global.FG.Layout;
+    S = global.FG.Store; UI = global.FG.UI; View = global.FG.View;
+    Layout = global.FG.Layout; W = global.FG.World; Pages = global.FG.Pages;
 
     var firstRun = false;
     try { firstRun = !global.localStorage.getItem('kroniky-rodu:v1'); } catch (e) { firstRun = true; }
 
     S.load();
     stage = q('#stage');
-    orbitHost = q('#app');
+    pageEl = q('#page');
+    treeSection = q('#tree-section');
 
     View.init(stage);
     View.onSelect = onSelect;
     View.onAction = onCanvasAction;
-    UI.orbit.mount(orbitHost, onOrbitAction);
+    UI.orbit.mount(treeSection, onOrbitAction);
 
+    buildSidebar();
     buildRails();
     bindTools();
     bindKeys();
@@ -46,33 +62,156 @@
 
     S.onChange(function (reason) {
       if (reason === 'tree-switch' || reason === 'import' || reason === 'tree-create' ||
-        reason === 'undo' || reason === 'redo' || reason === 'view' || reason === 'tree-delete') {
+        reason === 'undo' || reason === 'redo' || reason === 'view' ||
+        reason === 'tree-delete' || reason === 'world-switch') {
         pendingView = 'fit';
       } else if (reason === 'focus') {
         pendingView = 'center';
       }
       if (reason !== 'person-update' && reason !== 'settings') View.select(null);
-      render();
+      App.render();
     });
 
-    render();
-    View.fit(false);
-
+    var last = S.state.settings.section;
+    if (last && (last === 'prehled' || last === 'kalendar' || last === 'rodokmeny' ||
+      global.FG.World.TYPES[last])) {
+      App.section = last;
+    }
+    App.render();
     if (firstRun) welcome();
-    else showHint('Klepnutím na kartu otevřete nabídku. Tažením posouváte, kolečkem přibližujete.', 5200);
 
     global.addEventListener('resize', function () {
       if (View.selectedId) View.select(View.selectedId);
     });
   }
 
-  /* ---------------- vykreslení ---------------- */
+  /* ---------------- rozcestník ---------------- */
 
-  function render() {
+  var App = {
+    section: 'prehled',
+    detail: null,
+    history: [],
+
+    go: function (section, skipHistory) {
+      if (!skipHistory) this.history.push({ section: this.section, detail: this.detail });
+      this.section = section;
+      this.detail = null;
+      remember(section);
+      this.render();
+    },
+
+    open: function (id, skipHistory) {
+      if (!skipHistory) this.history.push({ section: this.section, detail: this.detail });
+      var e = W.get(S.activeWorld(), id);
+      if (e && W.TYPES[e.type]) this.section = e.type;
+      this.detail = id;
+      remember(this.section);
+      this.render();
+    },
+
+    back: function () {
+      var prev = this.history.pop();
+      if (prev) {
+        this.section = prev.section;
+        this.detail = prev.detail;
+      } else {
+        this.section = 'prehled';
+        this.detail = null;
+      }
+      this.render();
+    },
+
+    /* z detailu postavy rovnou do jejího rodokmenu */
+    showInTree: function (personId) {
+      var world = S.activeWorld();
+      var tree = S.treeOf(world, personId);
+      if (!tree) { UI.toast('Postava zatím není v žádném rodokmenu.', 'warn'); return; }
+      if (world.activeTreeId !== tree.id) world.activeTreeId = tree.id;
+      S.setFocus(tree, personId);
+      this.go('rodokmeny');
+    },
+
+    render: function () {
+      var world = S.activeWorld();
+      if (!world) return;
+      document.body.setAttribute('data-theme', S.state.settings.theme);
+      q('#world-name').textContent = world.name;
+      q('#world-meta').textContent = worldMeta(world);
+
+      var links = document.querySelectorAll('#sections .side-link');
+      for (var i = 0; i < links.length; i++) {
+        links[i].classList.toggle('on', links[i].getAttribute('data-sec') === App.section);
+      }
+
+      var onTree = App.section === 'rodokmeny' && !App.detail;
+      treeSection.classList.toggle('on', onTree);
+      pageEl.classList.toggle('on', !onTree);
+
+      if (onTree) renderTree();
+      else Pages.render(pageEl, App.section, App.detail);
+    }
+  };
+
+  /* aplikace si pamatuje, kde jste naposledy byli */
+  function remember(section) {
+    try {
+      S.state.settings.section = section;
+      S.save();
+    } catch (e) { /* na úložišti nezáleží */ }
+  }
+
+  function worldMeta(world) {
+    var n = W.count(world, 'postava');
+    var m = W.count(world, 'misto');
+    return n + ' postav · ' + m + ' míst';
+  }
+
+  function buildSidebar() {
+    var nav = q('#sections');
+    SECTIONS.forEach(function (sec) {
+      var b = UI.h('button', {
+        class: 'side-link', type: 'button', 'data-sec': sec.id, title: sec.label
+      }, [
+        UI.h('span', { class: 'side-ico', html: UI.icon(sec.icon, 20) }),
+        UI.h('span', { class: 'side-label', text: sec.label })
+      ]);
+      b.addEventListener('click', function () { App.go(sec.id); });
+      nav.appendChild(b);
+    });
+    q('#btn-world').addEventListener('click', function () { UI.worldManager(); });
+  }
+
+  /* ---------------- rodokmen ---------------- */
+
+  function renderTree() {
     var tree = S.activeTree();
     if (!tree) return;
     var set = S.state.settings;
-    document.body.setAttribute('data-theme', set.theme);
+
+    // prázdný rodokmen: není kam klepnout, nabídneme rovnou první postavu
+    var empty = q('#tree-empty');
+    if (!Object.keys(tree.people).length) {
+      if (!empty) {
+        empty = UI.h('div', { id: 'tree-empty', class: 'tree-empty' }, [
+          UI.h('p', { text: 'Rodokmen „' + tree.name + '" je zatím prázdný.' }),
+          UI.h('button', {
+            class: 'btn primary', type: 'button', text: 'Založit první postavu',
+            onclick: function () {
+              var t = S.activeTree();
+              S.snapshot();
+              var p = S.newPerson(t, { name: '' });
+              t.focusId = p.id;
+              S.emit('person-add');
+              setTimeout(function () { View.select(p.id); }, 260);
+            }
+          })
+        ]);
+        treeSection.appendChild(empty);
+      }
+      empty.style.display = '';
+    } else if (empty) {
+      empty.style.display = 'none';
+    }
 
     currentLayout = Layout.compute(tree, {
       focusId: tree.focusId,
@@ -87,6 +226,7 @@
 
     if (pendingView === 'fit') View.fit(true);
     else if (pendingView === 'center') View.centerOn(tree.focusId, true, true);
+    else if (pendingView === null && !View.layoutReady) View.fit(false);
     pendingView = null;
   }
 
@@ -118,8 +258,6 @@
     }
   }
 
-  /* ---------------- lišty ---------------- */
-
   function buildRails() {
     function make(host, options, key) {
       options.forEach(function (o) {
@@ -131,10 +269,9 @@
           UI.h('span', { text: o.small })
         ]);
         b.addEventListener('click', function () {
-          var tree = S.activeTree();
           var patch = {};
           patch[key] = o.v;
-          S.setView(tree, patch);
+          S.setView(S.activeTree(), patch);
         });
         host.appendChild(b);
       });
@@ -151,7 +288,7 @@
   }
 
   function bindTools() {
-    document.querySelectorAll('.tool').forEach(function (btn) {
+    document.querySelectorAll('.tool, .side-tool').forEach(function (btn) {
       btn.addEventListener('click', function () { tool(btn.getAttribute('data-act')); });
     });
     q('#btn-trees').addEventListener('click', function () { UI.treeManager(); });
@@ -161,17 +298,7 @@
     var tree = S.activeTree();
     switch (act) {
       case 'settings': UI.settings(); break;
-      case 'search':
-        UI.searchDialog(tree, function (id) {
-          if (currentLayout.index[id]) {
-            View.centerOn(id, true, true);
-            View.select(id);
-          } else {
-            setFocus(id);
-            UI.toast('Zaměřeno na ' + S.label(tree, id));
-          }
-        });
-        break;
+      case 'search': UI.worldSearch(); break;
       case 'export': UI.exportDialog(tree, currentLayout); break;
       case 'undo':
         if (!S.undo()) UI.toast('Není co vrátit.', 'warn');
@@ -218,9 +345,10 @@
       case 'link': UI.linkPerson(tree, id); break;
       case 'unlink': UI.unlinkPerson(tree, id); break;
       case 'focus': setFocus(id); break;
+      case 'detail': View.select(null); App.open(id); break;
       case 'delete':
         UI.confirm('Smazat osobu ' + S.label(tree, id) + '?',
-          'Osoba se odstraní ze stromu, její vazby zaniknou. Vrátit lze pomocí Ctrl+Z.',
+          'Osoba se odstraní ze stromu i ze světa. Vrátit lze pomocí Ctrl+Z.',
           function () { S.deletePerson(tree, id); UI.toast('Osoba smazána'); }, 'Smazat');
         break;
     }
@@ -246,6 +374,7 @@
       var t = ev.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
       if (document.querySelector('.modal-back')) return;
+      var onTree = App.section === 'rodokmeny' && !App.detail;
       var tree = S.activeTree();
       var sel = View.selectedId;
       var k = ev.key.toLowerCase();
@@ -259,21 +388,24 @@
       if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); S.redo(); return; }
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
 
+      if (k === 'f') { ev.preventDefault(); UI.worldSearch(); return; }
+      if (k === 'escape') {
+        if (onTree && View.selectedId) View.select(null);
+        else App.back();
+        return;
+      }
+      if (k === 'backspace') { ev.preventDefault(); App.back(); return; }
+
+      if (!onTree) return;
       switch (k) {
-        case 'escape': View.select(null); break;
-        case 'f': ev.preventDefault(); tool('search'); break;
         case 't': UI.treeManager(); break;
         case 'e': tool('export'); break;
-        case 'n': UI.settings(); break;
         case '0': View.fit(true); break;
         case 'c': View.centerOn(tree.focusId, true, true); break;
         case '+': case '=': View.zoomBy(1.2); break;
         case '-': View.zoomBy(1 / 1.2); break;
-        case 'backspace': ev.preventDefault(); focusBack(); break;
         case 'enter': if (sel) UI.editPerson(tree, sel); break;
-        case 'delete':
-          if (sel) onOrbitAction('delete', sel);
-          break;
+        case 'delete': if (sel) onOrbitAction('delete', sel); break;
       }
     });
   }
@@ -289,48 +421,38 @@
   }
 
   function welcome() {
-    var m = UI.modal({
+    UI.modal({
       title: 'Vítejte v Kronikách rodů',
       content: UI.h('div', {}, [
         UI.h('p', {
           class: 'dialog-text',
-          text: 'Zakládejte rodokmeny pro postavy svého fantasy světa — bez omezení počtu ' +
-            'pokolení i větví. Klepnutím na kartu osoby otevřete kruhovou nabídku, ' +
-            'kde přidáte rodiče, partnera či potomka, propojíte vzdálené větve ' +
-            'nebo osobu zaměříte a rozvinete strom kolem ní.'
+          text: 'Tady se staví celý fantasy svět: postavy, místa, národy, události, ' +
+            'kalendář a rodokmeny. Všechno se dá mezi sebou provázat a proklikat — ' +
+            'z postavy na její město, z města na národ, z události na ty, kdo v ní ' +
+            'vystupovali.'
         }),
         UI.h('p', {
           class: 'dialog-text',
-          text: 'Vlevo nahoře nastavíte, kolik pokolení předků se má zobrazit, ' +
-            'vlevo dole totéž pro potomky. Hotový strom uložíte jako obrázek ve formátu A5.'
+          text: 'V textech stačí napsat [[Jméno]] a vznikne odkaz. Rodokmeny jsou ' +
+            'jednou ze sekcí vlevo a osoby v nich jsou tytéž postavy jako v seznamu.'
         })
       ]),
       buttons: [
         {
           label: 'Prohlédnout ukázku',
           action: function () {
-            var t = demoTree();
-            S.setActiveTree(t.id);
-            UI.toast('Ukázkový rod otevřen — zkuste si v něm klikat');
+            demoWorld();
+            UI.toast('Ukázkový svět otevřen');
           }
         },
-        {
-          label: 'Založit vlastní rod', kind: 'primary',
-          action: function () {
-            var tree = S.activeTree();
-            setTimeout(function () {
-              View.select(tree.focusId);
-              showHint('Začněte tím, že první postavě vyplníte jméno — Upravit v nabídce.', 6000);
-            }, 220);
-          }
-        }
+        { label: 'Začít od nuly', kind: 'primary' }
       ]
     });
-    return m;
   }
 
-  function demoTree() {
-    var t = S.createTree('Rod Havraního hvozdu');
+  function demoWorld() {
+    var world = S.activeWorld();
+    var t = S.trees()[0];
     var P = {};
     function person(key, name, gender, birth, death, note) {
       var p = S.newPerson(t, { name: name, gender: gender, birth: birth, death: death, note: note || '' });
@@ -346,6 +468,26 @@
         t.people[arguments[i]].parentUnionId = u.id;
       }
     }
+
+    world.name = 'Havraní hvozd';
+    t.name = 'Rod Havraního hvozdu';
+
+    var narod = W.create(world, 'narod', {
+      name: 'Havraní rod', alias: 'Corvid', symbol: 'černý havran ve stříbrném poli',
+      note: 'Rod, který drží [[Hvozdovou tvrz]] od časů zakladatele.'
+    });
+    var kraj = W.create(world, 'misto', {
+      name: 'Havraní hvozd', druh: 'kraj',
+      note: 'Rozlehlý les na severu, protkaný Černou řekou.'
+    });
+    var tvrz = W.create(world, 'misto', {
+      name: 'Hvozdová tvrz', druh: 'tvrz', parent: kraj.id, narod: narod.id,
+      obyvatel: '2 000 obyvatel', note: 'Sídlo rodu nad soutokem.'
+    });
+    W.create(world, 'misto', {
+      name: 'Síň předků', druh: 'místnost', parent: tvrz.id,
+      note: 'Dlouhá síň s podobiznami všech pánů Hvozdu.'
+    });
 
     person('pra1', 'Orlan Havran', 'm', '812', '889', 'Zakladatel rodu, první pán Hvozdu.');
     person('pra2', 'Sylva z Mlžin', 'f', '818', '901');
@@ -371,23 +513,55 @@
     var u1 = union(P.ded1, P.ded2, '872', '918'); kids(u1, P.otec, P.teta);
     var u2 = union(P.otec, P.matka, '902', '944'); kids(u2, P.hrd, P.sestra, P.bratr);
     var u3 = union(P.teta, P.tetin, '898', '939'); kids(u3, P.bratranec);
-    // dva plnohodnotné svazky za sebou, každý s vlastními potomky
     var u4a = union(P.hrd, P.zena1, '925', '945'); kids(u4a, P.syn0);
     var u4 = union(P.hrd, P.zena, '950'); kids(u4, P.syn, P.dcera);
     var u5 = union(P.syn); kids(u5, P.vnuk);
 
-    // původní prázdná osoba z nového stromu už není potřeba
-    Object.keys(t.people).forEach(function (id) {
-      var p = t.people[id];
-      if (!p.name && !p.birth && !p.death && !p.note) delete t.people[id];
+    // postavy jsou entity světa — rovnou je zařadíme
+    [P.pra1, P.ded1, P.otec, P.hrd, P.syn].forEach(function (id) {
+      world.entities[id].narod = narod.id;
+      world.entities[id].misto = tvrz.id;
     });
-    S.prune(t);
+
+    W.create(world, 'udalost', {
+      name: 'Založení Hvozdové tvrze', datum: '846', epocha: 'První věk',
+      mista: [tvrz.id], postavy: [P.ded1],
+      note: '[[Rovan Havran]] nechal nad soutokem vystavět tvrz.'
+    });
+    W.create(world, 'udalost', {
+      name: 'Bitva u Šedého brodu', datum: '870', epocha: 'První věk',
+      postavy: [P.str1],
+      note: 'Padl zde [[Tomáš Havran]].'
+    });
+    W.create(world, 'udalost', {
+      name: 'Dračí války', datum: '921 – 934', epocha: 'Druhý věk',
+      postavy: [P.otec], mista: [kraj.id]
+    });
+
+    world.calendar = {
+      name: 'Hvozdový kalendář', daysInMonth: '30', daysInYear: '360',
+      months: [
+        { name: 'Tání', translation: '', season: 'Jaro' },
+        { name: 'Probouzení', translation: '', season: 'Jaro' },
+        { name: 'Sklizeň', translation: '', season: 'Podzim' },
+        { name: 'Jinovatka', translation: '', season: 'Zima' }
+      ],
+      holidays: [
+        { name: 'Noc havranů', translation: '', when: 'poslední tři dny v roce',
+          description: 'Rod se schází v Síni předků.' }
+      ],
+      note: ''
+    };
+
     t.focusId = P.hrd;
     t.view = { up: Infinity, down: Infinity };
     S.state.settings.collateral = 'all';
     S.emit('demo');
-    return t;
+    App.go('prehled');
   }
+
+  global.FG = global.FG || {};
+  global.FG.App = App;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

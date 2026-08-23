@@ -4,63 +4,86 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Kroniky rodů</title>
-<meta name="description" content="Tvorba nekonečných rodokmenů pro fantasy světy: větvení, propojování rodů, export do obrázku A5.">
+<meta name="description" content="Stavba fantasy světa: postavy, místa, národy, události, kalendář a rodokmeny — všechno provázané a klikatelné.">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🌳</text></svg>">
 </head>
 <body data-theme="pergamen">
 
 <div id="app">
-  <div id="stage"></div>
-
-  <!-- horní lišta -->
-  <header class="topbar">
-    <button id="btn-trees" class="chip-btn" title="Rody a stromy (T)">
-      <span class="chip-ico" data-icon="trees"></span>
-      <span class="chip-txt">
-        <strong id="tree-name">Rod</strong>
-        <em id="focus-name">—</em>
+  <aside id="sidebar">
+    <button id="btn-world" class="world-btn" title="Světy a zálohy">
+      <span class="world-mark" data-icon="world"></span>
+      <span class="world-txt">
+        <strong id="world-name">Svět</strong>
+        <em id="world-meta">—</em>
       </span>
     </button>
-  </header>
+    <nav id="sections"></nav>
+    <div class="side-foot">
+      <button class="side-tool" data-act="search" title="Hledat ve světě (F)">
+        <span data-icon="search"></span><span class="side-label">Hledat</span>
+      </button>
+      <button class="side-tool" data-act="settings" title="Nastavení">
+        <span data-icon="gear"></span><span class="side-label">Nastavení</span>
+      </button>
+    </div>
+  </aside>
 
-  <!-- předci -->
-  <div class="rail rail-tl">
-    <div class="rail-title">Předci</div>
-    <div class="rail-group" id="rail-up"></div>
-  </div>
+  <main id="content">
+    <div id="page" class="page"></div>
 
-  <!-- potomci -->
-  <div class="rail rail-bl">
-    <div class="rail-group" id="rail-down"></div>
-    <div class="rail-title">Potomci</div>
-  </div>
+    <section id="tree-section">
+      <div id="stage"></div>
 
-  <!-- nástroje -->
-  <div class="rail rail-tr">
-    <button class="tool" data-act="settings" title="Nastavení"><span data-icon="gear"></span></button>
-    <button class="tool" data-act="search" title="Najít osobu (F)"><span data-icon="search"></span></button>
-    <button class="tool" data-act="export" title="Uložit jako obrázek"><span data-icon="image"></span></button>
-    <button class="tool" data-act="undo" title="Zpět (Ctrl+Z)"><span data-icon="undo"></span></button>
-  </div>
+      <header class="topbar">
+        <button id="btn-trees" class="chip-btn" title="Rodokmeny (T)">
+          <span class="chip-ico" data-icon="trees"></span>
+          <span class="chip-txt">
+            <strong id="tree-name">Rod</strong>
+            <em id="focus-name">—</em>
+          </span>
+        </button>
+      </header>
 
-  <div class="rail rail-br">
-    <button class="tool" data-act="zoom-in" title="Přiblížit"><span data-icon="plus"></span></button>
-    <button class="tool" data-act="zoom-out" title="Oddálit"><span data-icon="minus"></span></button>
-    <button class="tool" data-act="fit" title="Zobrazit celý strom (0)"><span data-icon="fit"></span></button>
-    <button class="tool" data-act="center" title="Na zaměřenou osobu (C)"><span data-icon="focus"></span></button>
-  </div>
+      <div class="rail rail-tl">
+        <div class="rail-title">Předci</div>
+        <div class="rail-group" id="rail-up"></div>
+      </div>
 
-  <div id="hint" class="hint"></div>
+      <div class="rail rail-bl">
+        <div class="rail-group" id="rail-down"></div>
+        <div class="rail-title">Potomci</div>
+      </div>
+
+      <div class="rail rail-tr">
+        <button class="tool" data-act="search" title="Najít osobu (F)"><span data-icon="search"></span></button>
+        <button class="tool" data-act="export" title="Uložit jako obrázek"><span data-icon="image"></span></button>
+        <button class="tool" data-act="undo" title="Zpět (Ctrl+Z)"><span data-icon="undo"></span></button>
+      </div>
+
+      <div class="rail rail-br">
+        <button class="tool" data-act="zoom-in" title="Přiblížit"><span data-icon="plus"></span></button>
+        <button class="tool" data-act="zoom-out" title="Oddálit"><span data-icon="minus"></span></button>
+        <button class="tool" data-act="fit" title="Zobrazit celý strom (0)"><span data-icon="fit"></span></button>
+        <button class="tool" data-act="center" title="Na zaměřenou osobu (C)"><span data-icon="focus"></span></button>
+      </div>
+
+      <div id="hint" class="hint"></div>
+    </section>
+  </main>
+
   <div id="toasts"></div>
 </div>
 
+<script src="js/world.js"></script>
 <script src="js/store.js"></script>
 <script src="js/files.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/view.js"></script>
 <script src="js/export.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

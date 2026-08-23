@@ -43,12 +43,15 @@
     listeners: [],
     storageOk: true,
 
-    /* ---------- perzistence ---------- */
+    /* ---------- perzistence ----------
+       V úložišti drží každý svět své entity jednou; rodokmen si u sebe
+       pamatuje jen seznam id svých postav. Po načtení se odkazy propojí,
+       takže karta ve stromu a záznam v seznamu postav je jeden objekt. */
 
     defaults: function () {
       return {
-        version: 1,
-        activeTreeId: null,
+        version: 2,
+        activeWorldId: null,
         settings: {
           theme: prefersDark() ? 'inkoust' : 'pergamen',   // pergamen | inkoust
           collateral: 'siblings',  // none | siblings | all
@@ -56,8 +59,8 @@
           showYears: true,
           showNotes: true
         },
-        trees: {},
-        order: []
+        worlds: {},
+        worldOrder: []
       };
     },
 
@@ -65,50 +68,148 @@
       var raw = null;
       try { raw = global.localStorage.getItem(KEY); }
       catch (e) { this.storageOk = false; }
+      var data = null;
       if (raw) {
-        try { this.state = JSON.parse(raw); }
-        catch (e) { this.state = null; }
+        try { data = JSON.parse(raw); } catch (e) { data = null; }
       }
-      if (!this.state || !this.state.trees) this.state = this.defaults();
-      if (!this.state.order) this.state.order = Object.keys(this.state.trees);
-      if (!this.state.settings) this.state.settings = this.defaults().settings;
-      if (!this.state.order.length) {
-        var t = this.createTree('Rod bez jména', true);
-        this.state.activeTreeId = t.id;
+      this.state = this.hydrate(data);
+      if (!this.state.worldOrder.length) {
+        var w = this.createWorld('Můj svět', true);
+        this.state.activeWorldId = w.id;
       }
-      if (!this.state.trees[this.state.activeTreeId]) {
-        this.state.activeTreeId = this.state.order[0];
+      if (!this.state.worlds[this.state.activeWorldId]) {
+        this.state.activeWorldId = this.state.worldOrder[0];
       }
       this.normalize();
       return this.state;
     },
 
+    /* z uloženého tvaru (i staršího) udělá běžící stav */
+    hydrate: function (data) {
+      var W = global.FG.World;
+      var state = this.defaults();
+      if (!data) return state;
+      if (data.settings) {
+        for (var k in data.settings) state.settings[k] = data.settings[k];
+      }
+      if (data.worlds) {
+        state.worlds = data.worlds;
+        state.worldOrder = data.worldOrder || Object.keys(data.worlds);
+        state.activeWorldId = data.activeWorldId;
+      } else if (data.trees) {
+        // starší podoba: jen rodokmeny, bez světa okolo
+        var world = W.blank('Můj svět');
+        world.trees = data.trees;
+        world.treeOrder = data.order || Object.keys(data.trees);
+        world.activeTreeId = data.activeTreeId;
+        Object.keys(world.trees).forEach(function (tid) {
+          var t = world.trees[tid];
+          Object.keys(t.people || {}).forEach(function (pid) {
+            var p = t.people[pid];
+            if (!p || typeof p !== 'object') return;
+            p.type = 'postava';
+            p.alias = p.alias || '';
+            p.narod = p.narod || '';
+            p.misto = p.misto || '';
+            p.vzhled = p.vzhled || '';
+            p.povaha = p.povaha || '';
+            world.entities[pid] = p;
+          });
+          t.people = Object.keys(t.people || {});
+        });
+        state.worlds[world.id] = world;
+        state.worldOrder = [world.id];
+        state.activeWorldId = world.id;
+      }
+      // propojení rodokmenů s entitami
+      Object.keys(state.worlds).forEach(function (wid) {
+        var world = state.worlds[wid];
+        world.entities = world.entities || {};
+        world.trees = world.trees || {};
+        world.treeOrder = world.treeOrder || Object.keys(world.trees);
+        world.calendar = world.calendar || W.blank().calendar;
+        Object.keys(world.trees).forEach(function (tid) {
+          var t = world.trees[tid];
+          var ids = Array.isArray(t.people) ? t.people : Object.keys(t.people || {});
+          t.people = {};
+          ids.forEach(function (pid) {
+            if (world.entities[pid]) t.people[pid] = world.entities[pid];
+          });
+        });
+      });
+      return state;
+    },
+
+    /* opačný směr — do úložiště i do zálohy */
+    serialize: function (state) {
+      state = state || this.state;
+      var out = {
+        version: 2,
+        activeWorldId: state.activeWorldId,
+        settings: state.settings,
+        worlds: {},
+        worldOrder: state.worldOrder.slice()
+      };
+      Object.keys(state.worlds).forEach(function (wid) {
+        var w = state.worlds[wid];
+        var copy = {
+          id: w.id, name: w.name, created: w.created,
+          entities: w.entities,
+          calendar: w.calendar,
+          activeTreeId: w.activeTreeId,
+          treeOrder: w.treeOrder,
+          trees: {}
+        };
+        Object.keys(w.trees).forEach(function (tid) {
+          var t = w.trees[tid];
+          copy.trees[tid] = {
+            id: t.id, name: t.name, created: t.created,
+            focusId: t.focusId, view: t.view, unions: t.unions,
+            people: Object.keys(t.people || {})
+          };
+        });
+        out.worlds[wid] = copy;
+      });
+      return out;
+    },
+
     /* JSON neumí Infinity — po načtení převedeme null zpět na neomezeno */
     normalize: function () {
-      var trees = this.state.trees;
-      Object.keys(trees).forEach(function (id) {
-        var t = trees[id];
-        t.people = t.people || {};
-        t.unions = t.unions || {};
-        t.view = t.view || {};
-        if (t.view.up === null || t.view.up === undefined) t.view.up = Infinity;
-        if (t.view.down === null || t.view.down === undefined) t.view.down = Infinity;
-        Object.keys(t.unions).forEach(function (uid2) {
-          var u = t.unions[uid2];
-          if (u.start === undefined) u.start = '';
-          if (u.end === undefined) u.end = '';
-          if (u.note === undefined) u.note = '';
+      var worlds = this.state.worlds;
+      Object.keys(worlds).forEach(function (wid) {
+        var world = worlds[wid];
+        Object.keys(world.entities).forEach(function (eid) {
+          var e = world.entities[eid];
+          if (!e.type) e.type = 'postava';
+          if (!e.id) e.id = eid;
         });
-        if (!t.focusId || !t.people[t.focusId]) {
-          t.focusId = Object.keys(t.people)[0] || null;
+        Object.keys(world.trees).forEach(function (id) {
+          var t = world.trees[id];
+          t.people = t.people || {};
+          t.unions = t.unions || {};
+          t.view = t.view || {};
+          if (t.view.up === null || t.view.up === undefined) t.view.up = Infinity;
+          if (t.view.down === null || t.view.down === undefined) t.view.down = Infinity;
+          Object.keys(t.unions).forEach(function (uid2) {
+            var u = t.unions[uid2];
+            if (u.start === undefined) u.start = '';
+            if (u.end === undefined) u.end = '';
+            if (u.note === undefined) u.note = '';
+          });
+          if (!t.focusId || !t.people[t.focusId]) {
+            t.focusId = Object.keys(t.people)[0] || null;
+          }
+          Store.prune(t);
+        });
+        if (!world.trees[world.activeTreeId]) {
+          world.activeTreeId = world.treeOrder[0] || null;
         }
-        Store.prune(t);
       });
     },
 
     save: function () {
       try {
-        global.localStorage.setItem(KEY, JSON.stringify(this.state));
+        global.localStorage.setItem(KEY, JSON.stringify(this.serialize()));
         this.storageOk = true;
       } catch (e) {
         this.storageOk = false;
@@ -123,8 +224,6 @@
       for (var i = 0; i < this.listeners.length; i++) this.listeners[i](reason);
     },
 
-    /* ---------- undo ---------- */
-
     /* několik změn najednou = jeden krok zpět a jedno překreslení */
     batch: function (fn) {
       this.snapshot();
@@ -135,41 +234,96 @@
 
     snapshot: function () {
       if (this.silent) return;
-      this.undoStack.push(JSON.stringify(this.state.trees));
+      this.undoStack.push(JSON.stringify(this.serialize().worlds));
       if (this.undoStack.length > MAX_UNDO) this.undoStack.shift();
       this.redoStack.length = 0;
     },
 
+    restore: function (json) {
+      var data = this.serialize();
+      data.worlds = JSON.parse(json);
+      data.worldOrder = this.state.worldOrder.filter(function (id) {
+        return !!data.worlds[id];
+      });
+      Object.keys(data.worlds).forEach(function (id) {
+        if (data.worldOrder.indexOf(id) === -1) data.worldOrder.push(id);
+      });
+      this.state = this.hydrate(data);
+      this.normalize();
+    },
+
     undo: function () {
       if (!this.undoStack.length) return false;
-      this.redoStack.push(JSON.stringify(this.state.trees));
-      this.state.trees = JSON.parse(this.undoStack.pop());
-      if (!this.state.trees[this.state.activeTreeId]) {
-        this.state.activeTreeId = Object.keys(this.state.trees)[0] || null;
-      }
-      this.state.order = this.state.order.filter(function (id) {
-        return !!Store.state.trees[id];
-      });
-      Object.keys(this.state.trees).forEach(function (id) {
-        if (Store.state.order.indexOf(id) === -1) Store.state.order.push(id);
-      });
-      this.normalize();
+      this.redoStack.push(JSON.stringify(this.serialize().worlds));
+      this.restore(this.undoStack.pop());
       this.emit('undo');
       return true;
     },
 
     redo: function () {
       if (!this.redoStack.length) return false;
-      this.undoStack.push(JSON.stringify(this.state.trees));
-      this.state.trees = JSON.parse(this.redoStack.pop());
-      this.normalize();
+      this.undoStack.push(JSON.stringify(this.serialize().worlds));
+      this.restore(this.redoStack.pop());
       this.emit('redo');
       return true;
     },
 
-    /* ---------- stromy ---------- */
+    /* ---------- světy ---------- */
 
-    createTree: function (name, silent) {
+    createWorld: function (name, silent) {
+      var W = global.FG.World;
+      if (!silent) this.snapshot();
+      var world = W.blank(name);
+      this.state.worlds[world.id] = world;
+      this.state.worldOrder.push(world.id);
+      var tree = this.createTree('Rod bez jména', true, world);
+      world.activeTreeId = tree.id;
+      if (!silent) {
+        this.state.activeWorldId = world.id;
+        this.emit('world-create');
+      }
+      return world;
+    },
+
+    activeWorld: function () {
+      return this.state.worlds[this.state.activeWorldId] || null;
+    },
+
+    worlds: function () {
+      var s = this.state;
+      return s.worldOrder.map(function (id) { return s.worlds[id]; })
+        .filter(function (w) { return !!w; });
+    },
+
+    setActiveWorld: function (id) {
+      this.state.activeWorldId = id;
+      this.emit('world-switch');
+    },
+
+    renameWorld: function (id, name) {
+      this.snapshot();
+      this.state.worlds[id].name = name;
+      this.emit('world-rename');
+    },
+
+    deleteWorld: function (id) {
+      this.snapshot();
+      delete this.state.worlds[id];
+      this.state.worldOrder = this.state.worldOrder.filter(function (x) { return x !== id; });
+      if (this.state.activeWorldId === id) {
+        this.state.activeWorldId = this.state.worldOrder[0] || null;
+      }
+      if (!this.state.worldOrder.length) {
+        var w = this.createWorld('Můj svět', true);
+        this.state.activeWorldId = w.id;
+      }
+      this.emit('world-delete');
+    },
+
+    /* ---------- rodokmeny ---------- */
+
+    createTree: function (name, silent, world) {
+      world = world || this.activeWorld();
       if (!silent) this.snapshot();
       var id = uid('t');
       var tree = {
@@ -181,75 +335,104 @@
         people: {},
         unions: {}
       };
+      world.trees[id] = tree;
+      world.treeOrder.push(id);
       // strom vždy začíná jednou postavou, ať je kam klikat
-      var p = this.newPerson(tree, { name: '' });
+      var p = this.newPerson(tree, { name: '' }, world);
       tree.focusId = p.id;
-      this.state.trees[id] = tree;
-      this.state.order.push(id);
       if (!silent) this.emit('tree-create');
       return tree;
     },
 
     deleteTree: function (id) {
       this.snapshot();
-      delete this.state.trees[id];
-      this.state.order = this.state.order.filter(function (x) { return x !== id; });
-      if (this.state.activeTreeId === id) {
-        this.state.activeTreeId = this.state.order[0] || null;
-      }
-      if (!this.state.order.length) {
+      var world = this.activeWorld();
+      delete world.trees[id];
+      world.treeOrder = world.treeOrder.filter(function (x) { return x !== id; });
+      if (world.activeTreeId === id) world.activeTreeId = world.treeOrder[0] || null;
+      if (!world.treeOrder.length) {
         var t = this.createTree('Rod bez jména', true);
-        this.state.activeTreeId = t.id;
+        world.activeTreeId = t.id;
       }
       this.emit('tree-delete');
     },
 
     duplicateTree: function (id) {
       this.snapshot();
-      var src = this.state.trees[id];
-      var copy = clone(src);
-      copy.id = uid('t');
-      copy.name = src.name + ' (kopie)';
-      copy.created = Date.now();
-      this.state.trees[copy.id] = copy;
-      this.state.order.push(copy.id);
+      var world = this.activeWorld();
+      var src = world.trees[id];
+      var copy = {
+        id: uid('t'), name: src.name + ' (kopie)', created: Date.now(),
+        focusId: null, view: clone(src.view), people: {}, unions: {}
+      };
+      // kopie rodokmenu znamená i kopie jeho postav, ať jsou stromy nezávislé
+      var map = {};
+      Object.keys(src.people).forEach(function (pid) {
+        var e = clone(world.entities[pid]);
+        e.id = uid('p');
+        map[pid] = e.id;
+        world.entities[e.id] = e;
+        copy.people[e.id] = e;
+      });
+      Object.keys(src.unions).forEach(function (uid2) {
+        var u = clone(src.unions[uid2]);
+        u.id = uid('u');
+        u.partners = u.partners.map(function (x) { return map[x]; }).filter(Boolean);
+        u.children = u.children.map(function (x) { return map[x]; }).filter(Boolean);
+        copy.unions[u.id] = u;
+        u.children.forEach(function (c) { copy.people[c].parentUnionId = u.id; });
+      });
+      copy.focusId = map[src.focusId] || Object.keys(copy.people)[0] || null;
+      world.trees[copy.id] = copy;
+      world.treeOrder.push(copy.id);
       this.emit('tree-duplicate');
       return copy;
     },
 
     renameTree: function (id, name) {
       this.snapshot();
-      this.state.trees[id].name = name;
+      this.activeWorld().trees[id].name = name;
       this.emit('tree-rename');
     },
 
     setActiveTree: function (id) {
-      this.state.activeTreeId = id;
+      this.activeWorld().activeTreeId = id;
       this.emit('tree-switch');
     },
 
     activeTree: function () {
-      return this.state.trees[this.state.activeTreeId] || null;
+      var w = this.activeWorld();
+      return (w && w.trees[w.activeTreeId]) || null;
     },
 
     trees: function () {
-      var s = this.state;
-      return s.order.map(function (id) { return s.trees[id]; })
+      var w = this.activeWorld();
+      if (!w) return [];
+      return w.treeOrder.map(function (id) { return w.trees[id]; })
         .filter(function (t) { return !!t; });
+    },
+
+    /* rodokmen, ve kterém osoba vystupuje */
+    treeOf: function (world, personId) {
+      var ids = Object.keys(world.trees);
+      for (var i = 0; i < ids.length; i++) {
+        if (world.trees[ids[i]].people[personId]) return world.trees[ids[i]];
+      }
+      return null;
     },
 
     /* ---------- osoby a vazby ---------- */
 
-    newPerson: function (tree, data) {
-      var p = {
-        id: uid('p'),
+    newPerson: function (tree, data, world) {
+      world = world || this.activeWorld();
+      var p = global.FG.World.create(world, 'postava', {
         name: (data && data.name) || '',
         gender: (data && data.gender) || 'x',
         birth: (data && data.birth) || '',
         death: (data && data.death) || '',
-        note: (data && data.note) || '',
-        parentUnionId: null
-      };
+        note: (data && data.note) || ''
+      });
+      p.parentUnionId = null;
       tree.people[p.id] = p;
       return p;
     },
@@ -509,7 +692,9 @@
 
     deletePerson: function (tree, personId) {
       this.snapshot();
+      var world = this.activeWorld();
       delete tree.people[personId];
+      if (world) global.FG.World.remove(world, personId);
       for (var k in tree.unions) {
         var u = tree.unions[k];
         u.partners = u.partners.filter(function (x) { return x !== personId; });
@@ -615,37 +800,38 @@
     /* ---------- import / export dat ---------- */
 
     exportJSON: function () {
-      return JSON.stringify({
-        app: 'kroniky-rodu', version: 1, exported: new Date().toISOString(),
-        trees: this.state.trees, order: this.state.order
-      }, null, 2);
+      var data = this.serialize();
+      data.app = 'kroniky-rodu';
+      data.exported = new Date().toISOString();
+      return JSON.stringify(data, null, 2);
     },
 
     importJSON: function (text, mode) {
       var data = JSON.parse(text);
-      if (!data.trees) throw new Error('Soubor neobsahuje žádné rody.');
+      if (!data.worlds && !data.trees) {
+        throw new Error('Soubor neobsahuje žádný svět ani rod.');
+      }
       this.snapshot();
+      var incoming = this.hydrate(data);          // zvládne i starší zálohy
       if (mode === 'replace') {
-        this.state.trees = {};
-        this.state.order = [];
+        this.state.worlds = {};
+        this.state.worldOrder = [];
       }
       var first = null;
-      var order = data.order || Object.keys(data.trees);
-      order.forEach(function (id) {
-        var t = data.trees[id];
-        if (!t) return;
-        var copy = clone(t);
-        if (Store.state.trees[copy.id]) copy.id = uid('t');
-        copy.people = copy.people || {};
-        copy.unions = copy.unions || {};
-        copy.view = copy.view || { up: Infinity, down: Infinity };
-        if (copy.view.up === null) copy.view.up = Infinity;
-        if (copy.view.down === null) copy.view.down = Infinity;
-        Store.state.trees[copy.id] = copy;
-        Store.state.order.push(copy.id);
-        if (!first) first = copy.id;
+      incoming.worldOrder.forEach(function (wid) {
+        var w = incoming.worlds[wid];
+        if (!w) return;
+        if (Store.state.worlds[w.id]) {
+          var old = w.id;
+          w.id = uid('w');
+          if (incoming.activeWorldId === old) incoming.activeWorldId = w.id;
+        }
+        Store.state.worlds[w.id] = w;
+        Store.state.worldOrder.push(w.id);
+        if (!first) first = w.id;
       });
-      if (first) this.state.activeTreeId = first;
+      if (first) this.state.activeWorldId = first;
+      this.normalize();
       this.emit('import');
       return first;
     },
