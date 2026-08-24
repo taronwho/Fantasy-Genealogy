@@ -326,6 +326,12 @@
       // rodičovský pár nad středem svých dětí
       var parents = vu.partners.filter(function (q) { return vis[q] && !placed[q]; });
       if (!parents.length) return row;
+      // ručně zvolená strana platí i u rodičovské dvojice
+      var vlevo = tree.unions[vu.id] && tree.unions[vu.id].left;
+      if (vlevo && parents.length >= 2 && parents[0] !== vlevo) {
+        var i = parents.indexOf(vlevo);
+        if (i > 0) { parents.splice(i, 1); parents.unshift(vlevo); }
+      }
       var couple = coupleBlock(parents, g - 1);
       if (parents.length >= 2) unionMeta[vu.id] = { owner: parents[0], other: parents[1] };
 
