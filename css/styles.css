@@ -306,6 +306,15 @@ body[data-theme="inkoust"] #stage { box-shadow: inset 0 0 240px rgba(0, 0, 0, .6
 }
 .link-partner { stroke-width: 2; }
 .link-remote { stroke-dasharray: 5 6; opacity: .75; }
+.cloud-row .ent-meta::before {
+  content: ''; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 7px; vertical-align: middle;
+  background: var(--line);
+}
+.cloud-row.tone-ok .ent-meta::before { background: #4f7d42; }
+.cloud-row.tone-work .ent-meta::before { background: var(--accent); }
+.cloud-row.tone-bad .ent-meta::before { background: var(--danger); }
+
 .union { cursor: pointer; }
 .union-hit { fill: transparent; }
 .union-mark { fill: var(--accent); }
@@ -503,8 +512,13 @@ body[data-theme="inkoust"] #stage { box-shadow: inset 0 0 240px rgba(0, 0, 0, .6
 }
 .modal-body { padding: 16px 22px; overflow: auto; }
 .modal-foot {
-  display: flex; justify-content: flex-end; gap: 8px;
+  display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
   padding: 12px 18px 16px; border-top: 1px solid var(--line);
+}
+/* na úzkém displeji se tlačítka poskládají pod sebe, ať se žádné neuřízne */
+@media (max-width: 560px) {
+  .modal-foot { justify-content: stretch; }
+  .modal-foot .btn { flex: 1 1 auto; min-width: 44%; }
 }
 
 .btn {

@@ -1061,6 +1061,158 @@
 
     /* ---------- nastavení ---------- */
 
+
+    /* ---------- záloha do cloudu ---------- */
+
+    /* krátký popis stavu zálohy — používá ho Přehled i Nastavení */
+    cloudStav: function () {
+      var C = global.FG.Sync;
+      if (!C.zapnuto()) return { text: 'Není nastavena', tone: 'off' };
+      if (C.stav === 'prace') return { text: C.zprava || 'Ukládám…', tone: 'work' };
+      if (C.stav === 'chyba') return { text: C.zprava, tone: 'bad' };
+      if (C.stav === 'konflikt') return { text: 'V cloudu je jiná verze', tone: 'bad' };
+      var kdy = C.config().kdy;
+      return {
+        text: kdy ? 'Uloženo ' + UI.kdyText(kdy) : 'Připojeno, zatím neuloženo',
+        tone: 'ok'
+      };
+    },
+
+    kdyText: function (ms) {
+      if (!ms) return '—';
+      var d = new Date(ms), ted = new Date();
+      var cas = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      if (d.toDateString() === ted.toDateString()) return 'dnes v ' + cas;
+      return d.getDate() + '. ' + (d.getMonth() + 1) + '. v ' + cas;
+    },
+
+    /* stručný obsah zálohy, ať jde poznat, která verze je která */
+    cloudSouhrn: function (data) {
+      if (!data || !data.worlds) return 'neznámý obsah';
+      var postav = 0, mist = 0, stromu = 0;
+      Object.keys(data.worlds).forEach(function (wid) {
+        var w = data.worlds[wid];
+        Object.keys(w.entities || {}).forEach(function (id) {
+          var t = w.entities[id].type;
+          if (t === 'postava') postav++;
+          if (t === 'misto') mist++;
+        });
+        stromu += Object.keys(w.trees || {}).length;
+      });
+      return postav + ' postav · ' + mist + ' míst · ' + stromu +
+        (stromu === 1 ? ' rodokmen' : ' rodokmenů');
+    },
+
+    cloudDialog: function () {
+      var C = global.FG.Sync;
+      var cfg = C.config();
+      var m;
+
+      var repo = h('input', {
+        type: 'text', value: cfg.repo, placeholder: 'jmeno/mandriosa-data',
+        autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false'
+      });
+      var soubor = h('input', { type: 'text', value: cfg.path, placeholder: 'svet.json' });
+      var token = h('input', {
+        type: 'password', value: '', placeholder: cfg.token ? 'uložen — necháte-li prázdné, zůstane' : 'github_pat_…',
+        autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false'
+      });
+
+      var stav = h('p', { class: 'dialog-text small' });
+      function prekresli() {
+        if (!stav.isConnected) return;      // dialog už je zavřený
+        stav.textContent = 'Stav: ' + UI.cloudStav().text;
+      }
+      prekresli();
+
+      var navod = h('div', { class: 'dialog-text small' });
+      navod.innerHTML =
+        '<strong>Jak to nastavit</strong> (stačí jednou):' +
+        '<ol style="margin:6px 0 0 18px; padding:0">' +
+        '<li>Na GitHubu založte <em>nový soukromý</em> repozitář, třeba <code>mandriosa-data</code>. ' +
+        'Nechte ho prázdný.</li>' +
+        '<li>V Settings → Developer settings → Personal access tokens → ' +
+        '<em>Fine-grained tokens</em> vytvořte token: přístup jen k tomuto ' +
+        'repozitáři a jediné oprávnění <em>Contents: Read and write</em>.</li>' +
+        '<li>Sem vepište <code>jmeno/mandriosa-data</code> a vložte token.</li>' +
+        '</ol>' +
+        '<p style="margin:8px 0 0">Token zůstává jen v tomto prohlížeči a do zálohy ' +
+        'světa se nikdy nezapisuje. Kdyby se ztratil, zrušte ho na GitHubu — ' +
+        'dosáhne pouze na tento jeden repozitář.</p>';
+
+      var content = h('div', {}, [
+        h('p', {
+          class: 'dialog-text',
+          text: 'Svět se po každé změně uloží do vašeho soukromého repozitáře. ' +
+            'Každé uložení je commit, takže se dá vrátit i ke starší verzi.'
+        }),
+        UI.field('Repozitář', repo),
+        UI.field('Soubor', soubor),
+        UI.field('Přístupový token', token),
+        stav,
+        navod
+      ]);
+
+      var tlacitka = [{ label: 'Zavřít' }];
+      if (C.zapnuto()) {
+        tlacitka.push({
+          label: 'Uložit teď', action: function () {
+            global.FG.App.cloudUloz('Ruční záloha světa');
+            return false;
+          }
+        });
+        tlacitka.push({
+          label: 'Načíst z cloudu', action: function () {
+            m.close();
+            global.FG.App.cloudNacti();
+            return false;
+          }
+        });
+        tlacitka.push({
+          label: 'Odpojit', kind: 'ghost', action: function () {
+            m.close();
+            UI.confirm('Odpojit zálohu?',
+              'Data zůstanou v cloudu i v tomto prohlížeči, jen se přestanou ukládat.',
+              function () { C.odpojit(); UI.toast('Záloha odpojena'); }, 'Odpojit');
+            return false;
+          }
+        });
+      }
+      tlacitka.push({
+        label: C.zapnuto() ? 'Uložit nastavení' : 'Propojit', kind: 'primary',
+        action: function () {
+          var novy = {
+            repo: repo.value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, ''),
+            path: soubor.value.trim() || 'svet.json'
+          };
+          if (token.value.trim()) novy.token = token.value.trim();
+          if (!novy.repo || !/^[^/]+\/[^/]+$/.test(novy.repo)) {
+            UI.toast('Repozitář zapište jako jmeno/repozitar.', 'warn');
+            return false;
+          }
+          var zkus = C.config();
+          for (var k in novy) zkus[k] = novy[k];
+          if (!zkus.token) { UI.toast('Vložte přístupový token.', 'warn'); return false; }
+          stav.textContent = 'Stav: ověřuji…';
+          C.overit(zkus).then(function () {
+            if (zkus.repo !== C.config().repo || zkus.path !== C.config().path) novy.sha = '';
+            C.setConfig(novy);
+            m.close();
+            UI.toast('Propojeno s GitHubem');
+            global.FG.App.cloudStart(true);
+          }).catch(function (e) {
+            stav.textContent = 'Stav: ' + e.message;
+            UI.toast(e.message, 'warn');
+          });
+          return false;
+        }
+      });
+
+      m = this.modal({ title: 'Záloha v cloudu', wide: true, content: content, buttons: tlacitka });
+      C.onStav(prekresli);
+      return m;
+    },
+
     settings: function () {
       var S = global.FG.Store;
       var s = S.state.settings;
@@ -1109,7 +1261,12 @@
         h('hr', {}),
         h('div', { class: 'manager-tools' }, [
           h('button', { class: 'btn ghost', type: 'button', text: 'Zálohovat vše (JSON)', onclick: function () { UI.downloadJSON(); } }),
-          h('button', { class: 'btn ghost', type: 'button', text: 'Načíst ze zálohy', onclick: function () { UI.importDialog(); } })
+          h('button', { class: 'btn ghost', type: 'button', text: 'Načíst ze zálohy', onclick: function () { UI.importDialog(); } }),
+          h('button', {
+            class: 'btn ghost', type: 'button',
+            text: 'Záloha v cloudu · ' + UI.cloudStav().text,
+            onclick: function () { UI.cloudDialog(); }
+          })
         ]),
         h('p', {
           class: 'dialog-text small',

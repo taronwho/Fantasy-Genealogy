@@ -92,6 +92,7 @@
       if (data.settings) {
         for (var k in data.settings) state.settings[k] = data.settings[k];
       }
+      state.changedAt = data.changedAt || 0;
       if (data.worlds) {
         state.worlds = data.worlds;
         state.worldOrder = data.worldOrder || Object.keys(data.worlds);
@@ -146,6 +147,7 @@
       var out = {
         version: 2,
         activeWorldId: state.activeWorldId,
+        changedAt: state.changedAt || 0,   // kdy se naposledy něco změnilo
         settings: state.settings,
         worlds: {},
         worldOrder: state.worldOrder.slice()
@@ -211,6 +213,7 @@
 
     save: function () {
       try {
+        this.state.changedAt = Date.now();
         global.localStorage.setItem(KEY, JSON.stringify(this.serialize()));
         this.storageOk = true;
       } catch (e) {

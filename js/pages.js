@@ -182,6 +182,16 @@
       ]));
     }
 
+    // stav zálohy — ať je na první pohled vidět, že je svět v bezpečí
+    var cs = UI.cloudStav();
+    page.appendChild(h('button', {
+      class: 'wide-row cloud-row tone-' + cs.tone, type: 'button',
+      onclick: function () { UI.cloudDialog(); }
+    }, [
+      h('span', { class: 'ent-name', text: 'Záloha v cloudu' }),
+      h('span', { class: 'ent-meta', text: cs.text })
+    ]));
+
     var recent = W.all(w).filter(function (e) { return e.name; }).slice(0, 8);
     if (recent.length) {
       page.appendChild(h('h2', { class: 'sec-title', text: 'Záznamy ve světě' }));

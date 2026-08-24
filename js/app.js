@@ -56,6 +56,17 @@
     UI.orbit.mount(treeSection, onOrbitAction);
 
     initHistory();
+    Sync = global.FG.Sync;
+    Sync.onStav(function (stav) {
+      if (stav === 'chyba' && cloudStavMinuly !== 'chyba') {
+        UI.toast('Záloha do cloudu se nepovedla: ' + Sync.zprava, 'warn');
+      }
+      cloudStavMinuly = stav;
+      if (App.section === 'prehled' && !App.detail) App.render();
+    });
+    global.document.addEventListener('visibilitychange', function () {
+      if (global.document.visibilityState === 'hidden' && cloudCekani) App.cloudUloz();
+    });
     buildSidebar();
     buildRails();
     bindTools();
@@ -72,6 +83,7 @@
       }
       if (reason !== 'person-update' && reason !== 'settings') View.select(null);
       App.render();
+      cloudNaplanuj();
     });
 
     var last = S.state.settings.section;
@@ -81,9 +93,76 @@
     }
     App.render();
     if (firstRun) welcome();
+    App.cloudStart();
 
     global.addEventListener('resize', function () {
       if (View.selectedId) View.select(View.selectedId);
+    });
+  }
+
+  /* ---------------- záloha do cloudu ---------------- */
+  /* Svět žije v prohlížeči; pokud je nastavené propojení s GitHubem,
+     po každé změně se navíc uloží do soukromého repozitáře uživatele. */
+
+  var Sync = null;                 // FG.Sync, doplní se v init()
+  var cloudCekani = null;
+  var cloudTicho = false;          // při načítání z cloudu zpět neukládáme
+  var cloudPrvni = true;
+  var cloudStavMinuly = 'off';
+
+  function cloudNaplanuj() {
+    if (!Sync || !Sync.zapnuto() || cloudTicho) return;
+    clearTimeout(cloudCekani);
+    cloudCekani = setTimeout(function () { App.cloudUloz(); }, 2500);
+  }
+
+  function cloudSouhrnMistni() {
+    try { return UI.cloudSouhrn(JSON.parse(S.exportJSON())); }
+    catch (e) { return 'neznámý obsah'; }
+  }
+
+  /* dvě různé verze — rozhodnout musí uživatel, nic se nepřepíše samo */
+  function cloudVolba(data, r) {
+    UI.modal({
+      title: 'V cloudu je jiná verze',
+      wide: true,
+      content: UI.h('div', {}, [
+        UI.h('p', {
+          class: 'dialog-text',
+          text: 'Záloha v cloudu se liší od toho, co máte otevřené tady. ' +
+            'Vyberte, která verze platí dál — druhá se přepíše.'
+        }),
+        UI.h('div', { class: 'card-list' }, [
+          UI.h('div', { class: 'wide-row' }, [
+            UI.h('span', { class: 'ent-name', text: 'V cloudu' }),
+            UI.h('span', {
+              class: 'ent-meta',
+              text: UI.cloudSouhrn(data) + '  ·  ' + UI.kdyText(data.changedAt)
+            })
+          ]),
+          UI.h('div', { class: 'wide-row' }, [
+            UI.h('span', { class: 'ent-name', text: 'Zde v prohlížeči' }),
+            UI.h('span', {
+              class: 'ent-meta',
+              text: cloudSouhrnMistni() + '  ·  ' + UI.kdyText(S.state.changedAt)
+            })
+          ])
+        ])
+      ]),
+      buttons: [
+        { label: 'Rozhodnu později' },
+        {
+          label: 'Nechat zdejší', action: function () {
+            Sync.setConfig({ sha: r.sha });
+            App.cloudUloz('Přepsáno verzí z prohlížeče');
+          }
+        },
+        {
+          label: 'Načíst z cloudu', kind: 'primary', action: function () {
+            App.cloudPrevzit(r);
+          }
+        }
+      ]
     });
   }
 
@@ -180,6 +259,64 @@
       remember(this.section);
       this.render();
       scrollTo(prev ? prev.scroll : 0);
+    },
+
+    /* ---------- záloha do cloudu ---------- */
+
+    cloudUloz: function (popis) {
+      clearTimeout(cloudCekani);
+      if (!Sync || !Sync.zapnuto()) return;
+      Sync.push(S.exportJSON(), popis).then(function () {
+        if (cloudPrvni) { cloudPrvni = false; UI.toast('Svět uložen do cloudu'); }
+      }).catch(function (e) {
+        if (e.stav === 409 || e.stav === 422) {
+          Sync.pull().then(function (r) {
+            if (!r) return;
+            var data = null;
+            try { data = JSON.parse(r.text); } catch (x) {}
+            if (data) cloudVolba(data, r);
+          }).catch(function () {});
+        }
+      });
+    },
+
+    cloudPrevzit: function (r) {
+      cloudTicho = true;
+      try {
+        S.importJSON(r.text, 'replace');
+        Sync.setConfig({ sha: r.sha, kdy: Date.now() });
+        UI.toast('Načteno z cloudu');
+      } catch (e) {
+        UI.toast('Zálohu se nepodařilo načíst: ' + e.message, 'warn');
+      }
+      cloudTicho = false;
+    },
+
+    cloudNacti: function () {
+      if (!Sync || !Sync.zapnuto()) { UI.cloudDialog(); return; }
+      Sync.pull().then(function (r) {
+        if (!r) { UI.toast('V cloudu zatím nic není.', 'warn'); return; }
+        UI.confirm('Načíst z cloudu?',
+          'Nahradí to všechna data v tomto prohlížeči. Vrátit lze pomocí Ctrl+Z.',
+          function () { App.cloudPrevzit(r); }, 'Načíst');
+      }).catch(function (e) { UI.toast(e.message, 'warn'); });
+    },
+
+    /* po spuštění a po propojení: srovnat, co je tady a co v cloudu */
+    cloudStart: function () {
+      if (!Sync || !Sync.zapnuto()) return;
+      Sync.pull().then(function (r) {
+        if (!r) { App.cloudUloz('První záloha světa'); return; }
+        var data = null;
+        try { data = JSON.parse(r.text); } catch (e) {}
+        if (!data) { App.cloudUloz(); return; }
+        if (r.sha === Sync.znameSha()) {
+          // v cloudu leží přesně naše poslední uložení
+          if ((S.state.changedAt || 0) > (Sync.config().kdy || 0)) App.cloudUloz();
+          return;
+        }
+        cloudVolba(data, r);
+      }).catch(function () {});
     },
 
     /* z detailu postavy rovnou do jejího rodokmenu */
