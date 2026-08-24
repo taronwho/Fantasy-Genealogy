@@ -234,7 +234,7 @@
         id: u.id, x: u.x, y: u.y + dy,
         ax: u.ax, ay: u.ay + dy,
         arc: u.arc, arcTop: u.arcTop + dy, remote: u.remote,
-        years: u.years, note: u.note,
+        years: u.years, note: u.note, bus: u.bus,
         partners: u.partners, children: u.children
       };
       unionIndex[c.id] = c;
@@ -397,7 +397,7 @@
       var cy = c.y - M.NODE_H / 2;
       ctx.save();
       if (cy - uy > 20) {
-        var busY = cy - Math.min(48, (cy - uy) / 2);
+        var busY = cy - Math.min(32 + (u.bus || 0) * 30, Math.max(20, cy - uy - 14));
         var r = 11;
         ctx.beginPath();
         ctx.moveTo(ux, uy);
@@ -449,7 +449,18 @@
 
     // svazek — kosočtverec s obroučkou a obdobím trvání
     layout.unions.forEach(function (u) {
-      if (u.partners.length < 2) return;
+      if (u.partners.length < 2) {
+        // rodič bez partnera — prázdný kosočtverec tam, kde začíná větev
+        if (!u.children.length) return;
+        ctx.fillStyle = pal.card;
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 1.4;
+        diamond(ctx, u.ax, u.ay, 6);
+        ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = pal.link;
+        ctx.lineWidth = 1.8;
+        return;
+      }
       ctx.fillStyle = pal.accent;
       diamond(ctx, u.x, u.y, 6.5); ctx.fill();
       if (u.years && settings.showYears) {

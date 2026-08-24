@@ -309,8 +309,9 @@
         var cls = 'link-child';
         var d;
         if (cy - uy > 20) {
-          var busY = cy - Math.min(46, (cy - uy) / 2);
-          d = elbow(ux, uy, c.x, cy, busY, 12);
+          // svazky ve stejné řadě mají spojnici každý v jiné výšce
+          var off = Math.min(30 + (u.bus || 0) * 30, Math.max(20, cy - uy - 14));
+          d = elbow(ux, uy, c.x, cy, cy - off, 12);
         } else {
           cls += ' link-remote';
           d = 'M' + ux + ' ' + uy + ' C' + ux + ' ' + ((uy + c.y) / 2) +
@@ -345,12 +346,15 @@
         el('path', { d: d, class: cls }, View.gLinks);
       });
 
-      // značky svazků — klepnutím se otevře jejich období a poznámka
+      // Značky svazků — klepnutím se otevře jejich období a poznámka.
+      // I rodič bez partnera dostane značku (prázdný kosočtverec) v místě,
+      // odkud vede linka k dětem: je pak vidět, že jde o vlastní větev.
       layout.unions.forEach(function (u) {
-        if (u.partners.length < 2) return;
+        var solo = u.partners.length < 2;
+        if (solo && !u.children.length) return;
         var g = el('g', {
-          class: 'union' + (u.years ? ' has-years' : ''),
-          transform: 'translate(' + u.x + ',' + u.y + ')',
+          class: 'union' + (solo ? ' solo' : '') + (u.years ? ' has-years' : ''),
+          transform: 'translate(' + (solo ? u.ax : u.x) + ',' + (solo ? u.ay : u.y) + ')',
           'data-union': u.id
         }, View.gUnions);
         el('circle', { r: 15, class: 'union-hit' }, g);

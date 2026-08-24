@@ -182,6 +182,7 @@
     /* --- 2) rozmístění ---------------------------------------------- */
     var placed = {};
     var placedUnion = {};
+    var unitSeq = 0;          // karty kreslené vedle sebe (dvojice) drží pohromadě
     var unionMeta = {};   // kdo je v páru „domácí" a kdo připojený partner
 
     function unitBlock(personId, g) {
@@ -218,10 +219,11 @@
 
       var step = M.NODE_W + M.PARTNER_GAP;
       var total = (members.length - 1) * step;
+      var unit = 'j' + (++unitSeq);
       members.forEach(function (id, i) {
         placed[id] = true;
         var x = i * step - total / 2;
-        b.nodes.push({ id: id, x: x, gen: g });
+        b.nodes.push({ id: id, x: x, gen: g, unit: unit });
         addToContour(b.contour, g, x - M.NODE_W / 2, x + M.NODE_W / 2);
       });
       var pos = {};
@@ -291,10 +293,11 @@
       var b = newBlock();
       var step = M.NODE_W + M.PARTNER_GAP;
       var total = (ids.length - 1) * step;
+      var unit = 'j' + (++unitSeq);
       ids.forEach(function (id, i) {
         placed[id] = true;
         var x = i * step - total / 2;
-        b.nodes.push({ id: id, x: x, gen: g });
+        b.nodes.push({ id: id, x: x, gen: g, unit: unit });
         addToContour(b.contour, g, x - M.NODE_W / 2, x + M.NODE_W / 2);
       });
       b.anchor = 0;
@@ -395,11 +398,27 @@
     main.nodes.forEach(function (n) {
       (byGen[n.gen] = byGen[n.gen] || []).push(n);
     });
+    // Posouváme po celých dvojicích: kdyby se mezi partnery vecpal někdo
+    // cizí, musel by se jejich svazek kreslit obloukem přes půl řady.
     Object.keys(byGen).forEach(function (g) {
-      var row = byGen[g].sort(function (a, b) { return a.x - b.x; });
-      for (var i = 1; i < row.length; i++) {
-        var need = row[i - 1].x + M.NODE_W + M.MIN_GAP;
-        if (row[i].x < need) row[i].x = need;
+      var skupiny = {}, poradi = [];
+      byGen[g].forEach(function (n) {
+        var k = n.unit || ('s' + n.id);
+        if (!skupiny[k]) { skupiny[k] = []; poradi.push(k); }
+        skupiny[k].push(n);
+      });
+      var units = poradi.map(function (k) {
+        var ns = skupiny[k], lo = Infinity, hi = -Infinity;
+        ns.forEach(function (n) { lo = Math.min(lo, n.x); hi = Math.max(hi, n.x); });
+        return { ns: ns, lo: lo, hi: hi };
+      }).sort(function (a, b) { return a.lo - b.lo; });
+      for (var i = 1; i < units.length; i++) {
+        var need = units[i - 1].hi + M.NODE_W + M.MIN_GAP;
+        if (units[i].lo < need) {
+          var dx = need - units[i].lo;
+          units[i].ns.forEach(function (n) { n.x += dx; });
+          units[i].lo += dx; units[i].hi += dx;
+        }
       }
     });
 
@@ -507,6 +526,44 @@
       result.unionIndex[uid] = un;
       un.children.forEach(function (c) {
         result.childLinks.push({ unionId: uid, childId: c });
+      });
+    });
+
+    /* Každý svazek dostane vlastní výšku vodorovné spojnice k dětem.
+       Kdyby ji dva svazky sdílely, jejich čáry by splynuly v jednu a
+       vypadalo by to, že všechny děti patří oběma rodičům. Spojnice, která
+       přechází nad cizími dětmi, navíc musí ležet výš než jejich vlastní,
+       jinak by se čáry křížily. */
+    var busGroups = {};
+    result.unions.forEach(function (u) {
+      u.bus = 0;
+      var kids = [];
+      u.children.forEach(function (c) { if (result.index[c]) kids.push(result.index[c]); });
+      if (!kids.length) return;
+      var lo = u.ax, hi = u.ax;
+      kids.forEach(function (k) { lo = Math.min(lo, k.x); hi = Math.max(hi, k.x); });
+      var g = kids[0].gen;
+      (busGroups[g] = busGroups[g] || []).push({ u: u, lo: lo, hi: hi, kids: kids });
+    });
+    Object.keys(busGroups).forEach(function (g) {
+      var list = busGroups[g];
+      list.forEach(function (a) {
+        a.above = 0;
+        list.forEach(function (b) {
+          if (a === b) return;
+          var prechazi = b.kids.some(function (k) { return k.x > a.lo + 1 && k.x < a.hi - 1; });
+          if (prechazi) a.above += 1;
+        });
+      });
+      list.sort(function (x, y) { return x.above - y.above || x.lo - y.lo; });
+      var rows = [];
+      list.forEach(function (a) {
+        var r = a.above;
+        while (rows[r] && rows[r].some(function (sp) {
+          return a.lo <= sp[1] + 10 && a.hi >= sp[0] - 10;
+        })) r++;
+        (rows[r] = rows[r] || []).push([a.lo, a.hi]);
+        a.u.bus = r;
       });
     });
 
