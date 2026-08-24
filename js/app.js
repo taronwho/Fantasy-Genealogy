@@ -62,6 +62,7 @@
         UI.toast('Záloha do cloudu se nepovedla: ' + Sync.zprava, 'warn');
       }
       cloudStavMinuly = stav;
+      UI.cloudRefresh();
       if (App.section === 'prehled' && !App.detail) App.render();
     });
     global.document.addEventListener('visibilitychange', function () {
@@ -114,6 +115,7 @@
     if (!Sync || !Sync.zapnuto() || cloudTicho) return;
     clearTimeout(cloudCekani);
     cloudCekani = setTimeout(function () { App.cloudUloz(); }, 2500);
+    UI.cloudRefresh();
   }
 
   function cloudSouhrnMistni() {
@@ -263,8 +265,11 @@
 
     /* ---------- záloha do cloudu ---------- */
 
+    cloudCeka: function () { return !!cloudCekani; },
+
     cloudUloz: function (popis) {
       clearTimeout(cloudCekani);
+      cloudCekani = null;
       if (!Sync || !Sync.zapnuto()) return;
       Sync.push(S.exportJSON(), popis).then(function () {
         if (cloudPrvni) { cloudPrvni = false; UI.toast('Svět uložen do cloudu'); }
@@ -525,6 +530,8 @@
       btn.addEventListener('click', function () { tool(btn.getAttribute('data-act')); });
     });
     q('#btn-trees').addEventListener('click', function () { UI.treeManager(); });
+    var misto = q('#cloud-tool');
+    if (misto) misto.appendChild(UI.cloudTlacitko({ tool: true }));
   }
 
   function tool(act) {

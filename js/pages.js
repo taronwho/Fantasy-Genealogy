@@ -16,13 +16,17 @@
 
   /* ---------- drobné stavební prvky ---------- */
 
+  /* v hlavičce každé stránky stojí i tlačítko zálohy — ať je stav vidět
+     odkudkoli a šlo uložit jedním klepnutím */
   function pageHead(title, sub, actions) {
+    var akce = (actions || []).slice();
+    akce.unshift(UI.cloudTlacitko());
     return h('header', { class: 'page-head' }, [
       h('div', {}, [
         h('h1', { class: 'page-title', text: title }),
         sub ? h('p', { class: 'page-sub', text: sub }) : null
       ]),
-      actions ? h('div', { class: 'page-actions' }, actions) : null
+      h('div', { class: 'page-actions' }, akce)
     ]);
   }
 

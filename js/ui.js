@@ -28,6 +28,8 @@
     link: '<path d="M9.5 14.5l5-5"/><path d="M12 7l2-2a3.5 3.5 0 015 5l-2 2"/><path d="M12 17l-2 2a3.5 3.5 0 01-5-5l2-2"/>',
     unlink: '<path d="M12 7l2-2a3.5 3.5 0 015 5l-2 2"/><path d="M12 17l-2 2a3.5 3.5 0 01-5-5l2-2"/><path d="M4 4l16 16"/>',
     trash: '<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/>',
+    cloud: '<path d="M7.5 19h9.2a3.8 3.8 0 100-7.6 5.4 5.4 0 00-10.4 1.2A3.2 3.2 0 007.5 19z"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     left: '<path d="M13.5 6.5L8 12l5.5 5.5"/><path d="M19 12H8.4"/>',
     right: '<path d="M10.5 6.5L16 12l-5.5 5.5"/><path d="M5 12h10.6"/>',
     focus: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="8"/>',
@@ -1061,6 +1063,67 @@
 
     /* ---------- nastavení ---------- */
 
+
+
+    /* Tlačítko „uložit" i ukazatel stavu v jednom — sedí v hlavičce stránky
+       i mezi nástroji nad rodokmenem. */
+    cloudTlacitka: [],
+
+    cloudPopis: function () {
+      var C = global.FG.Sync;
+      var App = global.FG.App;
+      if (!C.zapnuto()) return { text: 'Záloha', tone: 'off', title: 'Nastavit zálohu do cloudu' };
+      if (C.stav === 'prace') return { text: 'Ukládám…', tone: 'work', title: 'Ukládám do cloudu' };
+      if (C.stav === 'chyba' || C.stav === 'konflikt') {
+        return { text: 'Neuloženo', tone: 'bad', title: C.zprava + ' — klepnutím zkusit znovu' };
+      }
+      if (App && App.cloudCeka && App.cloudCeka()) {
+        return { text: 'Ukládá se…', tone: 'work', title: 'Změny se za okamžik uloží — klepnutím hned' };
+      }
+      var kdy = C.config().kdy;
+      return {
+        text: kdy ? 'Uloženo' : 'Uložit',
+        tone: kdy ? 'ok' : 'off',
+        title: kdy ? 'Uloženo do cloudu ' + UI.kdyText(kdy) + ' — klepnutím uložit znovu'
+                   : 'Uložit svět do cloudu'
+      };
+    },
+
+    cloudTlacitko: function (opts) {
+      opts = opts || {};
+      var b = h('button', {
+        class: 'btn ghost cloud-btn' + (opts.tool ? ' tool' : ''),
+        type: 'button',
+        onclick: function () {
+          var C = global.FG.Sync;
+          if (!C.zapnuto()) { UI.cloudDialog(); return; }
+          global.FG.App.cloudUloz('Ruční záloha světa');
+        }
+      });
+      b.dataset.role = 'cloud';
+      if (opts.tool) b.setAttribute('data-act', 'none');
+      UI.cloudTlacitka.push(b);
+      UI.kresliCloud(b, !!opts.tool);
+      return b;
+    },
+
+    kresliCloud: function (b, jenIkona) {
+      var s2 = UI.cloudPopis();
+      b.className = (jenIkona ? 'tool cloud-btn' : 'btn ghost cloud-btn') + ' tone-' + s2.tone;
+      b.title = s2.title;
+      b.innerHTML = '<span class="cloud-ico">' +
+        icon(s2.tone === 'ok' ? 'check' : 'cloud', jenIkona ? 20 : 17) + '</span>' +
+        (jenIkona ? '' : '<span class="cloud-txt"></span>');
+      var t = b.querySelector('.cloud-txt');
+      if (t) t.textContent = s2.text;
+    },
+
+    cloudRefresh: function () {
+      UI.cloudTlacitka = UI.cloudTlacitka.filter(function (b) { return b.isConnected; });
+      UI.cloudTlacitka.forEach(function (b) {
+        UI.kresliCloud(b, b.classList.contains('tool'));
+      });
+    },
 
     /* ---------- záloha do cloudu ---------- */
 
