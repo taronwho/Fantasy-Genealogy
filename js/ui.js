@@ -1125,6 +1125,164 @@
       });
     },
 
+
+    /* ---------- hromadné zařazení míst ---------- */
+
+    /* Města obvykle patří do kraje, ale vyplňovat to u každého zvlášť je
+       otrava. Tohle okno zařadí rovnou celou skupinu. */
+    zaraditMista: function (opts) {
+      opts = opts || {};
+      var S = global.FG.Store, W = global.FG.World;
+      var w = S.activeWorld();
+      var m;
+
+      /* cíl — kam se místa zařadí */
+      var cil = h('select', {});
+      var nabidka = W.all(w, 'misto').slice();
+      nabidka.sort(function (a, b) {
+        var ka = a.druh === 'kraj' ? 0 : 1, kb = b.druh === 'kraj' ? 0 : 1;
+        return ka - kb || (a.name || '').localeCompare(b.name || '', 'cs');
+      });
+      cil.appendChild(h('option', { value: '', text: '— nikam (zrušit zařazení) —' }));
+      nabidka.forEach(function (x) {
+        cil.appendChild(h('option', {
+          value: x.id, text: x.name + (x.druh ? ' (' + x.druh + ')' : '')
+        }));
+      });
+
+      /* které záznamy nabídnout */
+      var vse = W.all(w, 'misto').filter(function (x) {
+        if (opts.cil && x.id === opts.cil) return false;
+        if (opts.narod) return x.narod === opts.narod;
+        return true;
+      });
+      var vybrano = {};
+      vse.forEach(function (x) { if (!x.parent) vybrano[x.id] = true; });
+
+      /* Předvolený cíl: kam už většina těch míst patří, jinak první kraj —
+         ať se omylem nezruší zařazení jedním klepnutím. */
+      var cetnost = {};
+      vse.forEach(function (x) {
+        if (x.parent) cetnost[x.parent] = (cetnost[x.parent] || 0) + 1;
+      });
+      var nejcastejsi = Object.keys(cetnost).sort(function (a, b) {
+        return cetnost[b] - cetnost[a];
+      })[0];
+      var prvniKraj = (nabidka.filter(function (x) { return x.druh === 'kraj'; })[0] || {}).id;
+      cil.value = opts.cil || nejcastejsi || prvniKraj || '';
+
+      var hledat = h('input', { type: 'search', placeholder: 'Hledat mezi místy…' });
+      var seznam = h('div', { class: 'pick-list tall' });
+      var pocet = h('p', { class: 'dialog-text small' });
+
+      function spocitej() {
+        var n = 0;
+        for (var k in vybrano) if (vybrano[k]) n++;
+        pocet.textContent = 'Vybráno: ' + n + ' z ' + vse.length;
+      }
+
+      function kresli() {
+        seznam.textContent = '';
+        var q = hledat.value.trim().toLowerCase();
+        var items = vse.filter(function (x) {
+          return !q || (x.name || '').toLowerCase().indexOf(q) !== -1;
+        });
+        if (!items.length) {
+          seznam.appendChild(h('div', { class: 'pick-empty', text: 'Nic nenalezeno.' }));
+        }
+        items.forEach(function (x) {
+          var box = h('input', { type: 'checkbox' });
+          box.checked = !!vybrano[x.id];
+          box.addEventListener('change', function () {
+            vybrano[x.id] = box.checked; spocitej();
+          });
+          var kde = x.parent ? W.label(w, x.parent) : '';
+          seznam.appendChild(h('label', { class: 'pick check' }, [
+            box,
+            h('span', { class: 'pick-name', text: x.name || 'Bez názvu' }),
+            h('span', {
+              class: 'pick-meta',
+              text: (x.druh || '') + (kde ? '  ·  nyní v ' + kde : '')
+            })
+          ]));
+        });
+        spocitej();
+      }
+      hledat.addEventListener('input', kresli);
+      kresli();
+
+      var content = h('div', {}, [
+        h('p', {
+          class: 'dialog-text',
+          text: opts.narod
+            ? 'Zařaďte místa tohoto národa do kraje. Zaškrtnutá jsou ta, ' +
+              'která zatím nikam nepatří.'
+            : 'Vyberte místa, která sem patří. Zaškrtnutá jsou ta, ' +
+              'která zatím nikam nepatří.'
+        }),
+        UI.field('Zařadit do', cil),
+        h('div', { class: 'toolbar' }, [
+          hledat,
+          h('button', {
+            class: 'mini', type: 'button', text: 'Vybrat vše',
+            onclick: function () {
+              vse.forEach(function (x) { vybrano[x.id] = true; });
+              kresli();
+            }
+          }),
+          h('button', {
+            class: 'mini', type: 'button', text: 'Zrušit výběr',
+            onclick: function () { vybrano = {}; kresli(); }
+          })
+        ]),
+        seznam,
+        pocet
+      ]);
+
+      m = this.modal({
+        title: 'Zařadit místa', wide: true, content: content,
+        buttons: [
+          { label: 'Zrušit' },
+          {
+            label: 'Zařadit', kind: 'primary',
+            action: function () {
+              var ids = Object.keys(vybrano).filter(function (k) { return vybrano[k]; });
+              if (!ids.length) { UI.toast('Nevybrali jste žádné místo.', 'warn'); return false; }
+              var cilId = cil.value;
+              if (cilId && ids.indexOf(cilId) !== -1) {
+                UI.toast('Místo nemůže ležet samo v sobě.', 'warn'); return false;
+              }
+              S.snapshot();
+              var zmen = 0;
+              ids.forEach(function (id) {
+                var x = W.get(w, id);
+                if (!x || x.parent === cilId) return;
+                if (cilId && UI.jePotomkem(w, cilId, id)) return;   // hlídání kruhu
+                x.parent = cilId;
+                zmen++;
+              });
+              S.emit('entity-update');
+              UI.toast(zmen
+                ? 'Zařazeno míst: ' + zmen + (cilId ? ' do ' + W.label(w, cilId) : '')
+                : 'Nic se nezměnilo');
+            }
+          }
+        ]
+      });
+      return m;
+    },
+
+    /* je „mozny" potomkem místa „predek"? (aby nevznikl kruh) */
+    jePotomkem: function (w, mozny, predek) {
+      var W = global.FG.World;
+      var cur = W.get(w, mozny), i = 0;
+      while (cur && cur.parent && i++ < 50) {
+        if (cur.parent === predek) return true;
+        cur = W.get(w, cur.parent);
+      }
+      return false;
+    },
+
     /* ---------- záloha do cloudu ---------- */
 
     /* krátký popis stavu zálohy — používá ho Přehled i Nastavení */

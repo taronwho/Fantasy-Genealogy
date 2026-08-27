@@ -104,7 +104,37 @@
       }
       byKey[key].items.push(b);
     });
+    // I prázdný oddíl má smysl ukázat — jinak by nebylo kam klepnout,
+    // když k záznamu zatím nic nepatří.
+    W.TYPE_ORDER.forEach(function (t) {
+      var spec = W.TYPES[t];
+      spec.fields.forEach(function (f) {
+        if ((f.t !== 'ref' && f.t !== 'refs') || f.to !== entity.type) return;
+        if (spec.tree === f.k) return;                 // to je oddíl „Uvnitř"
+        var key = t + ':' + f.k;
+        if (byKey[key]) return;
+        groups.push({
+          key: key, title: BACK_TITLES[key] || spec.plural,
+          items: [], rank: BACK_ORDER.indexOf(t)
+        });
+      });
+    });
     return groups.sort(function (a, b) { return a.rank - b.rank; });
+  }
+
+  /* nadpis oddílu i s tlačítkem, kterým se do něj rovnou přidá záznam */
+  function secTitle(text, akce) {
+    var head = h('div', { class: 'sec-head' }, [
+      h('h2', { class: 'sec-title', text: text })
+    ]);
+    (akce || []).forEach(function (a) {
+      if (!a) return;
+      head.appendChild(h('button', {
+        class: 'mini sec-add', type: 'button', text: a.label,
+        title: a.title || a.label, onclick: a.onclick
+      }));
+    });
+    return head;
   }
 
   function emptyNote(text) {
@@ -544,20 +574,53 @@
     // co je uvnitř (místa, národy)
     if (spec.tree) {
       var kids = W.childrenOf(w, e.type, e.id);
-      if (kids.length) {
-        page.appendChild(h('h2', { class: 'sec-title', text: 'Uvnitř' }));
-        var list = h('div', { class: 'card-list' });
-        kids.forEach(function (k) { list.appendChild(entRow(k)); });
-        page.appendChild(list);
-      }
+      var uvnitrPre = {};
+      uvnitrPre[spec.tree] = e.id;
+      if (e.type === 'misto' && e.narod) uvnitrPre.narod = e.narod;
+      page.appendChild(secTitle('Uvnitř' + (kids.length > 3 ? '  ·  ' + kids.length : ''), [
+        {
+          label: '+ ' + spec.label,
+          title: 'Přidat sem další záznam',
+          onclick: function () { Pages.editEntity(null, e.type, { prefill: uvnitrPre }); }
+        },
+        e.type === 'misto' ? {
+          label: 'Zařadit sem…',
+          title: 'Přesunout sem místa, která už ve světě jsou',
+          onclick: function () { UI.zaraditMista({ cil: e.id }); }
+        } : null
+      ]));
+      var list = h('div', { class: 'card-list' });
+      if (!kids.length) list.appendChild(emptyNote('Zatím sem nic nepatří.'));
+      kids.forEach(function (k) { list.appendChild(entRow(k)); });
+      page.appendChild(list);
     }
 
     // co k záznamu patří — po skupinách
     backGroups(w, e).forEach(function (g) {
-      page.appendChild(h('h2', {
-        class: 'sec-title',
-        text: g.title + (g.items.length > 3 ? '  ·  ' + g.items.length : '')
-      }));
+      var pridat = null;
+      var casti = g.key.split(':');
+      if (casti.length === 2 && W.TYPES[casti[0]]) {
+        var cilTyp = casti[0], cilPole = casti[1];
+        var pole = W.TYPES[cilTyp].fields.filter(function (f) { return f.k === cilPole; })[0];
+        var pre = {};
+        pre[cilPole] = (pole && pole.t === 'refs') ? [e.id] : e.id;
+        // nové místo národa ať rovnou sedí i v kraji, kde stojí ostatní
+        pridat = [{
+          label: '+ ' + W.TYPES[cilTyp].label,
+          title: 'Přidat další záznam do tohoto oddílu',
+          onclick: function () { Pages.editEntity(null, cilTyp, { prefill: pre }); }
+        }];
+        // místa národa jde hromadně zařadit do kraje
+        if (g.key === 'misto:narod') {
+          pridat.push({
+            label: 'Do kraje…',
+            title: 'Zařadit místa tohoto národa do kraje',
+            onclick: function () { UI.zaraditMista({ narod: e.id }); }
+          });
+        }
+      }
+      page.appendChild(secTitle(
+        g.title + (g.items.length > 3 ? '  ·  ' + g.items.length : ''), pridat));
       var list = h('div', { class: 'card-list' });
       var LIMIT = 12;
       function fill(all) {
@@ -574,7 +637,8 @@
           }));
         }
       }
-      fill(false);
+      if (!g.items.length) list.appendChild(emptyNote('Zatím sem nic nepatří.'));
+      else fill(false);
       page.appendChild(list);
     });
 
@@ -649,7 +713,9 @@
       var inputs = {};
 
       spec.fields.forEach(function (f) {
-        var cur = e ? e[f.k] : (f.t === 'refs' ? [] : '');
+        var vychozi = (opts.prefill || {})[f.k];
+        var cur = e ? e[f.k]
+          : (vychozi !== undefined ? vychozi : (f.t === 'refs' ? [] : ''));
         var el;
         if (f.t === 'long') {
           el = h('textarea', { rows: f.k === 'note' ? '5' : '3',
