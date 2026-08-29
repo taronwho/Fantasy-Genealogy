@@ -598,9 +598,14 @@
                       : 'Sám/sama (druhý rodič neznámý)'
         }));
       });
-      sel.appendChild(h('option', {
-        value: 'new', text: 'Nový svazek bez partnera (druhý rodič neznámý)'
-      }));
+      // Když už samostatný svazek existuje, další by byl jeho dvojník —
+      // nabídka by pak měla dvě stejně znějící položky.
+      var maSolo = unions.some(function (u) { return u.partners.length === 1; });
+      if (!maSolo) {
+        sel.appendChild(h('option', {
+          value: 'new', text: 'Sám/sama (druhý rodič neznámý)'
+        }));
+      }
       var box = UI.field('Rodičovský svazek', sel);
       if (!unions.length) { sel.value = 'new'; box.style.display = 'none'; }
       return { el: box, value: function () { return sel.value; } };

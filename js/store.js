@@ -442,7 +442,30 @@
       return p;
     },
 
+    /* Svazek je určený svými partnery. Dva svazky téže dvojice nemají smysl —
+       v rodokmenu se z nich zdvojí čáry i vazby a nejde poznat, který je
+       ten pravý. Klíč slouží k jejich porovnání. */
+    unionKey: function (partners) {
+      return (partners || []).slice().sort().join('|');
+    },
+
+    findUnion: function (tree, partners) {
+      if (!partners || !partners.length) return null;
+      var hledany = this.unionKey(partners);
+      for (var k in tree.unions) {
+        if (this.unionKey(tree.unions[k].partners) === hledany) return tree.unions[k];
+      }
+      return null;
+    },
+
     newUnion: function (tree, partners, data) {
+      var stary = this.findUnion(tree, partners);
+      if (stary) {                       // tahle dvojice už svazek má
+        ['start', 'end', 'note'].forEach(function (f) {
+          if (!stary[f] && data && data[f]) stary[f] = data[f];
+        });
+        return stary;
+      }
       var u = {
         id: uid('u'),
         partners: (partners || []).slice(),
@@ -676,15 +699,23 @@
         } else {
           var me = tree.people[personId];
           var pu = me.parentUnionId ? tree.unions[me.parentUnionId] : null;
-          if (pu && pu.partners.length < 2 && pu.partners.indexOf(otherId) === -1) {
-            pu.partners.push(otherId);
-          } else if (pu && pu.partners.indexOf(otherId) !== -1) {
+          if (pu && pu.partners.indexOf(otherId) !== -1) {
             msg = 'Tato osoba už je rodičem.';
+          } else if (pu && pu.partners.length < 2) {
+            if (pu.children.length > 1) {
+              // svazek sdílejí sourozenci — druhého rodiče dostane jen tato osoba
+              pu.children = pu.children.filter(function (c) { return c !== personId; });
+              var spolu = this.unionWith(tree, pu.partners.concat([otherId]));
+              me.parentUnionId = spolu.id;
+              if (spolu.children.indexOf(personId) === -1) spolu.children.push(personId);
+            } else {
+              pu.partners.push(otherId);
+            }
           } else {
             var nu = this.newUnion(tree, [otherId]);
             this.detachFromParents(tree, personId);
             me.parentUnionId = nu.id;
-            nu.children.push(personId);
+            if (nu.children.indexOf(personId) === -1) nu.children.push(personId);
           }
         }
       }
@@ -731,11 +762,6 @@
 
     /* svazek s přesně těmito partnery — buď už existuje, nebo vznikne */
     unionWith: function (tree, partners) {
-      var hledany = partners.slice().sort().join('|');
-      for (var k in tree.unions) {
-        var u = tree.unions[k];
-        if (u.partners.slice().sort().join('|') === hledany) return u;
-      }
       return this.newUnion(tree, partners);
     },
 
@@ -766,7 +792,9 @@
       } else if (rel.kind === 'child') {
         var uc = tree.unions[rel.unionId];
         if (uc) uc.children = uc.children.filter(function (c) { return c !== rel.targetId; });
-        if (tree.people[rel.targetId]) tree.people[rel.targetId].parentUnionId = null;
+        var kid = tree.people[rel.targetId];
+        // rodiče ztrácí jen tehdy, když patřilo právě tomuto svazku
+        if (kid && kid.parentUnionId === rel.unionId) kid.parentUnionId = null;
       }
       this.prune(tree);
       this.emit('unlink');
@@ -797,21 +825,76 @@
       this.emit('person-delete');
     },
 
+    /* Srovná strom do stavu, kde vazby nemohou být dvojznačné:
+         – jedna dvojice = jeden svazek
+         – dítě patří právě do jednoho svazku a ten o něm ví
+         – svazek bez potomků a bez dvojice nedrží nic pohromadě
+       Běží po každé úpravě vazeb i při načtení, takže se starší rozsypaná
+       data spraví sama. */
     prune: function (tree) {
-      for (var k in tree.unions) {
-        var u = tree.unions[k];
-        u.partners = u.partners.filter(function (x) { return !!tree.people[x]; });
-        u.children = u.children.filter(function (x) { return !!tree.people[x]; });
-        if (!u.partners.length && u.children.length < 1) {
-          u.children.forEach(function (c) { tree.people[c].parentUnionId = null; });
-          delete tree.unions[k];
-        } else if (!u.partners.length) {
-          u.children.forEach(function (c) { tree.people[c].parentUnionId = null; });
-          delete tree.unions[k];
-        }
+      var k, u, pid, p;
+
+      // 1. odkazy na osoby, které ve stromu nejsou
+      for (k in tree.unions) {
+        u = tree.unions[k];
+        u.partners = (u.partners || []).filter(function (x) { return !!tree.people[x]; });
+        u.children = (u.children || []).filter(function (x) { return !!tree.people[x]; });
       }
-      for (var pid in tree.people) {
-        var p = tree.people[pid];
+
+      // 2. svazky se stejnými partnery se slijí do prvního
+      var podle = {};
+      Object.keys(tree.unions).forEach(function (id) {
+        var d = tree.unions[id];
+        if (!d.partners.length) return;
+        var key = Store.unionKey(d.partners);
+        var prvni = podle[key];
+        if (!prvni) { podle[key] = d; return; }
+        d.children.forEach(function (c) {
+          if (prvni.children.indexOf(c) === -1) prvni.children.push(c);
+          if (tree.people[c].parentUnionId === d.id) tree.people[c].parentUnionId = prvni.id;
+        });
+        ['start', 'end', 'note', 'left'].forEach(function (f) {
+          if (!prvni[f] && d[f]) prvni[f] = d[f];
+        });
+        delete tree.unions[id];
+      });
+
+      // 3. svazek bez partnerů nikoho nespojuje
+      for (k in tree.unions) {
+        if (tree.unions[k].partners.length) continue;
+        tree.unions[k].children.forEach(function (c) { tree.people[c].parentUnionId = null; });
+        delete tree.unions[k];
+      }
+
+      // 4. dítě a jeho svazek si musí odpovídat — jinak vzniká vazba navíc,
+      //    která po odpojení strhne i tu pravou
+      for (pid in tree.people) {
+        p = tree.people[pid];
+        if (p.parentUnionId && !tree.unions[p.parentUnionId]) p.parentUnionId = null;
+      }
+      for (k in tree.unions) {
+        u = tree.unions[k];
+        u.children = u.children.filter(function (c) {
+          var kid = tree.people[c];
+          if (!kid.parentUnionId) { kid.parentUnionId = u.id; return true; }
+          return kid.parentUnionId === u.id;
+        });
+      }
+      for (pid in tree.people) {
+        p = tree.people[pid];
+        if (!p.parentUnionId) continue;
+        u = tree.unions[p.parentUnionId];
+        if (u.children.indexOf(pid) === -1) u.children.push(pid);
+      }
+
+      // 5. svazek bez potomků a bez druhého partnera nenese žádnou informaci
+      for (k in tree.unions) {
+        u = tree.unions[k];
+        if (u.children.length || u.partners.length >= 2) continue;
+        delete tree.unions[k];
+      }
+      for (pid in tree.people) {
+        p = tree.people[pid];
         if (p.parentUnionId && !tree.unions[p.parentUnionId]) p.parentUnionId = null;
       }
     },
