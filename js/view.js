@@ -25,16 +25,22 @@
   }
 
   function elbow(ux, uy, cx, cy, busY, r) {
-    var d = 'M' + ux + ' ' + uy + ' V' + (busY - Math.sign(busY - uy) * r);
-    if (Math.abs(cx - ux) < 1) return 'M' + ux + ' ' + uy + ' V' + cy;
-    var dir = cx > ux ? 1 : -1;
-    d = 'M' + ux + ' ' + uy +
-      ' V' + (busY - r) +
-      ' Q' + ux + ' ' + busY + ' ' + (ux + dir * r) + ' ' + busY +
-      ' H' + (cx - dir * r) +
-      ' Q' + cx + ' ' + busY + ' ' + cx + ' ' + (busY + r) +
+    var dx = cx - ux;
+    if (Math.abs(dx) < 0.5) return 'M' + ux + ' ' + uy + ' V' + cy;
+    var dir = dx > 0 ? 1 : -1;
+    /* Oblouk nesmí být delší než úsek, který zatáčí. Když dítě stojí skoro
+       přesně pod svazkem, čára jinak vyjede za roh a vrátí se — vypadá to
+       jako smyčka. */
+    var rr = Math.min(r, Math.abs(dx) / 2, Math.abs(busY - uy), Math.abs(cy - busY));
+    if (rr < 0.5) {
+      return 'M' + ux + ' ' + uy + ' V' + busY + ' H' + cx + ' V' + cy;
+    }
+    return 'M' + ux + ' ' + uy +
+      ' V' + (busY - rr) +
+      ' Q' + ux + ' ' + busY + ' ' + (ux + dir * rr) + ' ' + busY +
+      ' H' + (cx - dir * rr) +
+      ' Q' + cx + ' ' + busY + ' ' + cx + ' ' + (busY + rr) +
       ' V' + cy;
-    return d;
   }
 
   /* sazba jmena do karty: 16px -> 14px -> dva radky -> zkraceni */
@@ -154,7 +160,7 @@
 
     bindPointer: function () {
       var self = this, pointers = {}, panning = false, moved = false;
-      var last = null, pinch = null, downTarget = null;
+      var last = null, pinch = null, downTarget = null, drag = null;
 
       this.svg.addEventListener('wheel', function (ev) {
         ev.preventDefault();
@@ -175,10 +181,23 @@
           panning = true; moved = false;
           downTarget = ev.target;
           last = { x: ev.clientX, y: ev.clientY };
+          // karta se dá chytit a přetáhnout do strany; svislý pohyb
+          // i pohyb mimo kartu zůstává posouváním plátna
+          var node = ev.target.closest ? ev.target.closest('.node') : null;
+          // Prstem se po stromu hlavně posouvá, proto tam chceme zřetelně
+          // vodorovný tah — myší stačí naznačit.
+          var dotyk = ev.pointerType === 'touch';
+          drag = node ? {
+            id: node.getAttribute('data-id'), el: node,
+            base: node.getAttribute('transform') || '',
+            x0: ev.clientX, y0: ev.clientY, active: false, dx: 0,
+            prah: dotyk ? 28 : 7, sklon: dotyk ? 1.8 : 1
+          } : null;
           self.svg.setPointerCapture(ev.pointerId);
         } else if (ids.length === 2) {
           panning = false;
           pinch = self.pinchState(pointers);
+          self.endDrag(drag, false); drag = null;
         }
       });
 
@@ -200,6 +219,21 @@
           return;
         }
         if (!panning) return;
+        if (drag) {
+          var tx = ev.clientX - drag.x0, ty = ev.clientY - drag.y0;
+          if (!drag.active && Math.abs(tx) > drag.prah &&
+              Math.abs(tx) > Math.abs(ty) * drag.sklon) {
+            drag.active = true;
+            drag.el.classList.add('dragging');
+            self.svg.classList.add('dragging-node');
+          }
+          if (drag.active) {
+            moved = true;
+            drag.dx = tx / self.t.k;          // do souřadnic stromu
+            drag.el.setAttribute('transform', drag.base + ' translate(' + drag.dx + ',0)');
+            return;                            // plátnem během tažení nehýbeme
+          }
+        }
         var dx = ev.clientX - last.x, dy = ev.clientY - last.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
         last = { x: ev.clientX, y: ev.clientY };
@@ -211,7 +245,10 @@
         delete pointers[ev.pointerId];
         if (Object.keys(pointers).length < 2) pinch = null;
         if (!Object.keys(pointers).length) {
-          if (panning && !moved) self.handleTap(downTarget || ev.target);
+          var byloTazeni = drag && drag.active;
+          self.endDrag(drag, true);
+          drag = null;
+          if (panning && !moved && !byloTazeni) self.handleTap(downTarget || ev.target);
           panning = false;
         }
       }
@@ -230,6 +267,21 @@
         d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
         cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2
       };
+    },
+
+    /* Konec tažení: karta se vrátí na své místo a aplikace ji přesune
+       o tolik kroků, o kolik ji uživatel odtáhl. Přepočet na kroky drží
+       strom v pořádku — karty se prohodí, čáry zůstanou správně. */
+    endDrag: function (drag, commit) {
+      if (!drag) return;
+      this.svg.classList.remove('dragging-node');
+      if (!drag.active) return;
+      drag.el.classList.remove('dragging');
+      drag.el.setAttribute('transform', drag.base);
+      if (!commit) return;
+      var krok = M.NODE_W + M.SIB_GAP;
+      var kroky = Math.round(drag.dx / krok);
+      if (kroky && this.onDrag) this.onDrag(drag.id, kroky);
     },
 
     handleTap: function (target) {

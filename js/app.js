@@ -54,6 +54,7 @@
     View.init(stage);
     View.onSelect = onSelect;
     View.onAction = onCanvasAction;
+    View.onDrag = dragPerson;
     UI.orbit.mount(treeSection, onOrbitAction);
 
     initHistory();
@@ -675,6 +676,31 @@
   function canSwapSide(id, dir) {
     var p = partnerPair(id);
     return !!p && (dir < 0 ? !p.left : p.left);
+  }
+
+  /* Přetažení karty do strany = tolik kroků posunu, o kolik ji uživatel
+     odtáhl. Krok po kroku, ať se strom po každém posunu srovná. */
+  function dragPerson(id, kroky) {
+    var tree = S.activeTree();
+    var dir = kroky < 0 ? -1 : 1;
+    var udelano = 0;
+    for (var i = 0; i < Math.abs(kroky); i++) {
+      if (S.movePerson(tree, id, dir)) { udelano++; continue; }
+      var p = partnerPair(id);
+      if (p && (dir < 0 ? !p.left : p.left)) {
+        S.setUnionSide(tree, p.unionId, dir < 0 ? id : p.other);
+        udelano++;
+        continue;
+      }
+      break;
+    }
+    if (udelano) {
+      View.select(id);
+      UI.toast(S.label(tree, id) + (dir < 0 ? ' posunuta doleva' : ' posunuta doprava'));
+    } else {
+      UI.toast('Dál už to nejde — ' + S.label(tree, id) +
+        ' je na kraji své skupiny sourozenců.', 'warn');
+    }
   }
 
   /* posun karty v řadě — po překreslení vrátíme nabídku na nové místo */

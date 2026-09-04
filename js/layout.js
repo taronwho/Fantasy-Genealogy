@@ -263,9 +263,26 @@
       return b;
     }
 
+    /* Svazek může být „přivázaný" k rodině jednoho z partnerů. Bez toho
+       si dvojici vezme ta větev, která přijde na řadu dřív — u Lurietských
+       králů tak Nikabor spadl nalevo ke Galetině rodině, ačkoli královská
+       linie před ním vede po pravé straně. */
+    function ceka(personId) {
+      var out = false;
+      S.unionsOf(tree, personId).forEach(function (u) {
+        if (out || !visUnions[u.id] || placedUnion[u.id]) return;
+        if (!u.anchor || u.anchor === personId) return;
+        if (u.partners.indexOf(u.anchor) === -1) return;
+        if (!vis[u.anchor] || placed[u.anchor]) return;
+        out = true;
+      });
+      return out;
+    }
+
     /* karta osoby + celé potomstvo pod ní */
-    function buildDown(personId, g) {
+    function buildDown(personId, g, ikdyz) {
       if (placed[personId] || !vis[personId]) return null;
+      if (!ikdyz && ceka(personId)) return null;   // dvojici postaví ta druhá větev
       var b = unitBlock(personId, g);
 
       // svazky této jednotky, kde je personId partnerem
@@ -416,12 +433,12 @@
       if (placed[id]) return;
       var vu = parentUnionVisible(id);
       if (vu && vu.partners.some(function (p) { return vis[p] && !placed[p]; })) return;
-      var lb = buildDown(id, gen[id]);
+      var lb = buildDown(id, gen[id], true);
       if (lb) leftovers.push(lb);
     });
     Object.keys(vis).forEach(function (id) {
       if (placed[id]) return;
-      var lb = buildDown(id, gen[id]);
+      var lb = buildDown(id, gen[id], true);
       if (lb) leftovers.push(lb);
     });
     leftovers.forEach(function (lb) {

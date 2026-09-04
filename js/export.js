@@ -398,13 +398,20 @@
       ctx.save();
       if (cy - uy > 20) {
         var busY = cy - Math.min(32 + (u.bus || 0) * 30, Math.max(20, cy - uy - 14));
-        var r = 11;
+        var dx = c.x - ux;
+        // oblouk zkrátíme na délku úseku, který zatáčí — jinak čára přejede
+        // roh a vrátí se, což vypadá jako smyčka
+        var r = Math.min(11, Math.abs(dx) / 2, Math.abs(busY - uy), Math.abs(cy - busY));
         ctx.beginPath();
         ctx.moveTo(ux, uy);
-        if (Math.abs(c.x - ux) < 1) {
+        if (Math.abs(dx) < 0.5) {
+          ctx.lineTo(c.x, cy);
+        } else if (r < 0.5) {
+          ctx.lineTo(ux, busY);
+          ctx.lineTo(c.x, busY);
           ctx.lineTo(c.x, cy);
         } else {
-          var dir = c.x > ux ? 1 : -1;
+          var dir = dx > 0 ? 1 : -1;
           ctx.lineTo(ux, busY - r);
           ctx.quadraticCurveTo(ux, busY, ux + dir * r, busY);
           ctx.lineTo(c.x - dir * r, busY);

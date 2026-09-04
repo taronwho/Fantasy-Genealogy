@@ -327,6 +327,25 @@
             })
           : null,
         u.partners.length >= 2
+          ? UI.field('Kreslit u rodiny', h('div', { class: 'segmented' },
+              u.partners.map(function (pid) {
+                return h('button', {
+                  type: 'button',
+                  class: 'seg' + (u.anchor === pid ? ' on' : ''),
+                  text: S.label(tree, pid),
+                  title: 'Dvojice se bude kreslit u předků této osoby',
+                  onclick: function () {
+                    if (S.setUnionAnchor(tree, u.id, u.anchor === pid ? '' : pid)) {
+                      m.close();
+                      UI.toast(u.anchor
+                        ? 'Dvojice se kreslí u rodiny ' + S.label(tree, u.anchor)
+                        : 'Umístění dvojice ponecháno na aplikaci');
+                    }
+                  }
+                });
+              })))
+          : null,
+        u.partners.length >= 2
           ? h('button', {
               class: 'mini danger', type: 'button', text: 'Rozdělit svazek',
               onclick: function () {

@@ -210,6 +210,8 @@
             if (u.note === undefined) u.note = '';
             if (u.left === undefined) u.left = '';
             if (u.left && u.partners.indexOf(u.left) === -1) u.left = '';
+            if (u.anchor === undefined) u.anchor = '';
+            if (u.anchor && u.partners.indexOf(u.anchor) === -1) u.anchor = '';
           });
           if (!t.focusId || !t.people[t.focusId]) {
             t.focusId = Object.keys(t.people)[0] || null;
@@ -484,7 +486,8 @@
         start: (data && data.start) || '',
         end: (data && data.end) || '',
         note: (data && data.note) || '',
-        left: ''            // kdo z dvojice stojí ve stromu vlevo
+        left: '',           // kdo z dvojice stojí ve stromu vlevo
+        anchor: ''          // u čí rodiny se dvojice kreslí
       };
       tree.unions[u.id] = u;
       return u;
@@ -598,6 +601,18 @@
       var i = list.indexOf(personId);
       if (i < 0 || list.length < 2) return null;
       return { union: u, list: list, index: i };
+    },
+
+    /* U koho z dvojice se pár kreslí. Bez volby si ho vezme ta větev,
+       která přijde ve stromu na řadu dřív — což nemusí být ta hlavní. */
+    setUnionAnchor: function (tree, unionId, personId) {
+      var u = tree.unions[unionId];
+      if (!u || (personId && u.partners.indexOf(personId) === -1)) return false;
+      if (u.anchor === (personId || '')) return false;
+      this.snapshot();
+      u.anchor = personId || '';
+      this.emit('person-update');
+      return true;
     },
 
     /* překlopí partnery na opačné strany — leftId bude stát vlevo */
@@ -877,7 +892,7 @@
           if (prvni.children.indexOf(c) === -1) prvni.children.push(c);
           if (tree.people[c].parentUnionId === d.id) tree.people[c].parentUnionId = prvni.id;
         });
-        ['start', 'end', 'note', 'left'].forEach(function (f) {
+        ['start', 'end', 'note', 'left', 'anchor'].forEach(function (f) {
           if (!prvni[f] && d[f]) prvni[f] = d[f];
         });
         delete tree.unions[id];
