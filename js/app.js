@@ -482,6 +482,38 @@
     markRail('#rail-up', tree.view.up);
     markRail('#rail-down', tree.view.down);
     updateSkryti(tree, total - shown);
+    updatePosun(tree);
+  }
+
+  /* Ručně posunuté karty jde vrátit tam, kam je vypočítá aplikace.
+     Bez toho by se z nepovedeného přesunu šlo dostat jen krokem zpět. */
+  function updatePosun(tree) {
+    var btn = q('#btn-posun');
+    if (!btn) return;
+    var ids = S.nudged(tree);
+    if (!ids.length) { btn.hidden = true; return; }
+    btn.hidden = false;
+    btn.textContent = ids.length + ' posunut' +
+      (ids.length === 1 ? 'á' : ids.length < 5 ? 'é' : 'ých');
+    btn.title = 'Ručně přesunuté karty: ' +
+      ids.map(function (id) { return S.label(tree, id); }).join(', ') +
+      '. Klepnutím je vrátíte tam, kam je umístí aplikace.';
+  }
+
+  function srovnejPosuny() {
+    var tree = S.activeTree();
+    if (!tree) return;
+    var ids = S.nudged(tree);
+    if (!ids.length) return;
+    UI.confirm('Srovnat posunuté karty?',
+      'Vrátí se na místo, které jim vypočítá aplikace — jde o ' + ids.length +
+      ' kartu/karty: ' + ids.map(function (id) { return S.label(tree, id); }).join(', ') +
+      '. Vrátit lze pomocí Ctrl+Z.',
+      function () {
+        S.clearNudges(tree);
+        pendingView = 'fit';
+        UI.toast('Karty srovnány');
+      }, 'Srovnat');
   }
 
   /* Kdo se nekreslí, není poznat — a nastavení, které ho schovává, může
@@ -581,6 +613,7 @@
     });
     q('#btn-trees').addEventListener('click', function () { UI.treeManager(); });
     q('#btn-skryti').addEventListener('click', onSkrytiClick);
+    q('#btn-posun').addEventListener('click', srovnejPosuny);
     var misto = q('#cloud-tool');
     if (misto) misto.appendChild(UI.cloudTlacitko({ tool: true }));
   }
@@ -678,34 +711,26 @@
     return !!p && (dir < 0 ? !p.left : p.left);
   }
 
-  /* Přetažení karty do strany = tolik kroků posunu, o kolik ji uživatel
-     odtáhl. Krok po kroku, ať se strom po každém posunu srovná. */
-  function dragPerson(id, kroky) {
+  /* Přetažení karty = volná vodorovná poloha. Rozvržení počítá aplikace,
+     ale poslední slovo má autor — kam kartu položí, tam zůstane. Řada
+     bývá zaplněná, takže se karta klidně smí překrýt s jinou; jen to
+     nesmí proběhnout potichu, aby se nikdo neschoval pod sousedem. */
+  function dragPerson(id, dx) {
     var tree = S.activeTree();
-    var dir = kroky < 0 ? -1 : 1;
-    var udelano = 0;
-    for (var i = 0; i < Math.abs(kroky); i++) {
-      if (S.movePerson(tree, id, dir)) { udelano++; continue; }
-      var p = partnerPair(id);
-      if (p && (dir < 0 ? !p.left : p.left)) {
-        S.setUnionSide(tree, p.unionId, dir < 0 ? id : p.other);
-        udelano++;
-        continue;
-      }
-      break;
-    }
-    if (udelano) {
-      View.select(id);
-      UI.toast(S.label(tree, id) + (dir < 0 ? ' posunuta doleva' : ' posunuta doprava'));
-    } else {
-      UI.toast('Dál už to nejde — ' + S.label(tree, id) +
-        ' je na kraji své skupiny sourozenců.', 'warn');
-    }
+    if (!S.nudge(tree, id, dx)) return;
+    // nabídku po přetažení neotvíráme, jinak by zakryla, co se právě stalo
+    var pres = View.kolize(id, 0);
+    UI.toast(pres.length
+      ? S.label(tree, id) + ' překrývá: ' + pres.join(', ') + ' — Ctrl+Z vrátí zpět'
+      : S.label(tree, id) + ' přesunuta — Ctrl+Z vrátí zpět',
+      pres.length ? 'warn' : '');
   }
 
   /* posun karty v řadě — po překreslení vrátíme nabídku na nové místo */
   function movePerson(id, dir) {
     var tree = S.activeTree();
+    // šipky mění pořadí ve stromu, takže ruční posun té karty pozbývá smyslu
+    S.resetNudge(tree, id, true);
     if (S.movePerson(tree, id, dir)) { View.select(id); return; }
     var p = partnerPair(id);
     if (p && (dir < 0 ? !p.left : p.left)) {

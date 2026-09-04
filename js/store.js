@@ -178,6 +178,7 @@
           copy.trees[tid] = {
             id: t.id, name: t.name, created: t.created,
             focusId: t.focusId, view: t.view, unions: t.unions,
+            offsets: t.offsets || {},
             people: Object.keys(t.people || {})
           };
         });
@@ -201,6 +202,10 @@
           t.people = t.people || {};
           t.unions = t.unions || {};
           t.view = t.view || {};
+          t.offsets = t.offsets || {};
+          Object.keys(t.offsets).forEach(function (pid) {
+            if (!t.people[pid] || !t.offsets[pid]) delete t.offsets[pid];
+          });
           if (t.view.up === null || t.view.up === undefined) t.view.up = Infinity;
           if (t.view.down === null || t.view.down === undefined) t.view.down = Infinity;
           Object.keys(t.unions).forEach(function (uid2) {
@@ -351,7 +356,8 @@
         focusId: null,
         view: { up: Infinity, down: Infinity },
         people: {},
-        unions: {}
+        unions: {},
+        offsets: {}          // ruční vodorovný posun karet
       };
       world.trees[id] = tree;
       world.treeOrder.push(id);
@@ -381,7 +387,7 @@
       var src = world.trees[id];
       var copy = {
         id: uid('t'), name: src.name + ' (kopie)', created: Date.now(),
-        focusId: null, view: clone(src.view), people: {}, unions: {}
+        focusId: null, view: clone(src.view), people: {}, unions: {}, offsets: {}
       };
       // kopie rodokmenu znamená i kopie jeho postav, ať jsou stromy nezávislé
       var map = {};
@@ -399,6 +405,9 @@
         u.children = u.children.map(function (x) { return map[x]; }).filter(Boolean);
         copy.unions[u.id] = u;
         u.children.forEach(function (c) { copy.people[c].parentUnionId = u.id; });
+      });
+      Object.keys(src.offsets || {}).forEach(function (pid) {
+        if (map[pid]) copy.offsets[map[pid]] = src.offsets[pid];
       });
       copy.focusId = map[src.focusId] || Object.keys(copy.people)[0] || null;
       world.trees[copy.id] = copy;
@@ -611,6 +620,48 @@
       if (u.anchor === (personId || '')) return false;
       this.snapshot();
       u.anchor = personId || '';
+      this.emit('person-update');
+      return true;
+    },
+
+    /* ---------- ruční posun karet ----------
+       Rozvržení počítá aplikace, ale poslední slovo má autor: každá karta
+       si může nést vodorovný posun, který se přičte až nakonec. Svislá
+       poloha zůstává na pokolení, jinak by strom přestal dávat smysl. */
+
+    nudge: function (tree, personId, dx) {
+      if (!tree.people[personId] || !dx) return false;
+      this.snapshot();
+      tree.offsets = tree.offsets || {};
+      var novy = Math.round((tree.offsets[personId] || 0) + dx);
+      if (novy) tree.offsets[personId] = novy;
+      else delete tree.offsets[personId];
+      this.emit('person-update');
+      return true;
+    },
+
+    nudgeOf: function (tree, personId) {
+      return (tree.offsets && tree.offsets[personId]) || 0;
+    },
+
+    resetNudge: function (tree, personId, silent) {
+      if (!tree.offsets || !tree.offsets[personId]) return false;
+      if (!silent) this.snapshot();
+      delete tree.offsets[personId];
+      if (!silent) this.emit('person-update');
+      return true;
+    },
+
+    nudged: function (tree) {
+      return Object.keys(tree.offsets || {}).filter(function (id) {
+        return !!tree.people[id];
+      });
+    },
+
+    clearNudges: function (tree) {
+      if (!this.nudged(tree).length) return false;
+      this.snapshot();
+      tree.offsets = {};
       this.emit('person-update');
       return true;
     },

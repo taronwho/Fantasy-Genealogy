@@ -231,6 +231,8 @@
             moved = true;
             drag.dx = tx / self.t.k;          // do souřadnic stromu
             drag.el.setAttribute('transform', drag.base + ' translate(' + drag.dx + ',0)');
+            // ať je vidět, že karta míří na jinou, ještě než ji pustíme
+            drag.el.classList.toggle('collide', self.kolize(drag.id, drag.dx).length > 0);
             return;                            // plátnem během tažení nehýbeme
           }
         }
@@ -269,19 +271,31 @@
       };
     },
 
-    /* Konec tažení: karta se vrátí na své místo a aplikace ji přesune
-       o tolik kroků, o kolik ji uživatel odtáhl. Přepočet na kroky drží
-       strom v pořádku — karty se prohodí, čáry zůstanou správně. */
+    /* Konec tažení: karta zůstane tam, kam ji uživatel položil. Posun se
+       předá aplikaci, která si ho uloží u rodokmenu; svislá poloha se
+       nemění, tu určuje pokolení. */
     endDrag: function (drag, commit) {
       if (!drag) return;
       this.svg.classList.remove('dragging-node');
       if (!drag.active) return;
       drag.el.classList.remove('dragging');
+      drag.el.classList.remove('collide');
       drag.el.setAttribute('transform', drag.base);
       if (!commit) return;
-      var krok = M.NODE_W + M.SIB_GAP;
-      var kroky = Math.round(drag.dx / krok);
-      if (kroky && this.onDrag) this.onDrag(drag.id, kroky);
+      if (Math.abs(drag.dx) >= 1 && this.onDrag) this.onDrag(drag.id, drag.dx);
+    },
+
+    /* koho by karta po posunu o dx překryla ve své řadě */
+    kolize: function (id, dx) {
+      var L = this.layout;
+      if (!L || !L.index[id]) return [];
+      var me = L.index[id];
+      var cil = me.x + (dx || 0);
+      var S = global.FG.Store;
+      var tree = S.activeTree();
+      return L.persons.filter(function (n) {
+        return n.gen === me.gen && n.id !== id && Math.abs(n.x - cil) < M.NODE_W;
+      }).map(function (n) { return S.label(tree, n.id); });
     },
 
     handleTap: function (target) {

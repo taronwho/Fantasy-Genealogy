@@ -475,6 +475,15 @@
       }
     });
 
+    /* Ruční posun karet. Přičítá se až úplně nakonec, takže vlastní
+       rozvržení zůstane nedotčené — všechno pod tímhle bodem (řady,
+       značky svazků, výšky spojnic) se pak počítá už z posunutých
+       poloh, aby čáry seděly. */
+    var rucne = tree.offsets || {};
+    main.nodes.forEach(function (n) {
+      if (rucne[n.id]) n.x += rucne[n.id];
+    });
+
     /* --- 4) výstup --------------------------------------------------- */
     var pos = {};
     main.nodes.forEach(function (n) { pos[n.id] = n; });
