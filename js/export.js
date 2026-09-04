@@ -32,6 +32,18 @@
       stain: 'rgba(255, 218, 150, .04)',
       vignette: 'rgba(0, 0, 0, .5)',
       m: '#7fa2bd', f: '#cd8b98', x: '#9c8d74'
+    },
+    /* Prostý list — bílý papír, černý tisk, žádné plakety ani rám.
+       Takhle se rodokmeny sázejí v dodatcích knih. */
+    prosty: {
+      plain: true, dark: false,
+      bg: '#ffffff', bgHi: '#ffffff',
+      frame: '#000000', frameFine: '#000000',
+      ink: '#000000', muted: '#333333',
+      card: '#ffffff', cardLine: '#000000', cardEdge: '#000000',
+      accent: '#000000', link: '#000000',
+      stain: 'rgba(0,0,0,0)', vignette: 'rgba(0,0,0,0)',
+      m: '#000000', f: '#000000', x: '#000000'
     }
   };
 
@@ -305,41 +317,54 @@
     var m = pageMetrics(W, H);
     var margin = m.margin;
 
-    paperTexture(ctx, W, H, pal);
-    drawFrame(ctx, W, H, margin, pal);
-
-    // nadpis
     var focus = tree.people[layout.focusId];
-    var title = (tree.name || 'Rodokmen').toUpperCase();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = pal.ink;
-    if ('letterSpacing' in ctx) ctx.letterSpacing = Math.round(m.titleSize * 0.09) + 'px';
-    ctx.font = '600 ' + m.titleSize + 'px ' + global.FG.View.serif;
-    ctx.fillText(fitText(ctx, title, W - margin * 3), W / 2, m.titleBase);
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-
-    ctx.font = 'italic ' + m.subSize + 'px ' + global.FG.View.serif;
-    ctx.fillStyle = pal.muted;
     var genSpan = layout.maxGen - layout.minGen + 1;
     var sub = focus ? 'rod postavy ' + ((focus.name || '').trim() || 'bez jména') : '';
     sub += sub ? '  ·  ' : '';
     sub += genSpan + ' pokolení  ·  ' + layout.persons.length + ' ' + czOsob(layout.persons.length);
-    ctx.fillText(fitText(ctx, sub, W - margin * 3), W / 2, m.subBase);
 
-    // ozdobná linka pod nadpisem
-    var ruleW = Math.min(W - margin * 3, m.base * 0.62);
-    ctx.strokeStyle = pal.frame;
-    ctx.lineWidth = Math.max(1, m.base * 0.0016);
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - ruleW / 2, m.ruleY);
-    ctx.lineTo(W / 2 - m.subSize * 1.1, m.ruleY);
-    ctx.moveTo(W / 2 + m.subSize * 1.1, m.ruleY);
-    ctx.lineTo(W / 2 + ruleW / 2, m.ruleY);
-    ctx.stroke();
-    ctx.fillStyle = pal.frame;
-    diamond(ctx, W / 2, m.ruleY, m.subSize * 0.42); ctx.fill();
-    diamond(ctx, W / 2 - ruleW / 2, m.ruleY, m.subSize * 0.2); ctx.fill();
-    diamond(ctx, W / 2 + ruleW / 2, m.ruleY, m.subSize * 0.2); ctx.fill();
+    if (pal.plain) {
+      ctx.fillStyle = pal.bg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = pal.ink;
+      ctx.font = 'italic 600 ' + m.titleSize + 'px ' + global.FG.View.serif;
+      ctx.fillText(fitText(ctx, tree.name || 'Rodokmen', W - margin * 2), W / 2, m.titleBase);
+      ctx.font = m.subSize + 'px ' + global.FG.View.serif;
+      ctx.fillStyle = pal.muted;
+      ctx.fillText(fitText(ctx, sub, W - margin * 2), W / 2, m.subBase);
+    } else {
+      paperTexture(ctx, W, H, pal);
+      drawFrame(ctx, W, H, margin, pal);
+
+      // nadpis
+      var title = (tree.name || 'Rodokmen').toUpperCase();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = pal.ink;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = Math.round(m.titleSize * 0.09) + 'px';
+      ctx.font = '600 ' + m.titleSize + 'px ' + global.FG.View.serif;
+      ctx.fillText(fitText(ctx, title, W - margin * 3), W / 2, m.titleBase);
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+
+      ctx.font = 'italic ' + m.subSize + 'px ' + global.FG.View.serif;
+      ctx.fillStyle = pal.muted;
+      ctx.fillText(fitText(ctx, sub, W - margin * 3), W / 2, m.subBase);
+
+      // ozdobná linka pod nadpisem
+      var ruleW = Math.min(W - margin * 3, m.base * 0.62);
+      ctx.strokeStyle = pal.frame;
+      ctx.lineWidth = Math.max(1, m.base * 0.0016);
+      ctx.beginPath();
+      ctx.moveTo(W / 2 - ruleW / 2, m.ruleY);
+      ctx.lineTo(W / 2 - m.subSize * 1.1, m.ruleY);
+      ctx.moveTo(W / 2 + m.subSize * 1.1, m.ruleY);
+      ctx.lineTo(W / 2 + ruleW / 2, m.ruleY);
+      ctx.stroke();
+      ctx.fillStyle = pal.frame;
+      diamond(ctx, W / 2, m.ruleY, m.subSize * 0.42); ctx.fill();
+      diamond(ctx, W / 2 - ruleW / 2, m.ruleY, m.subSize * 0.2); ctx.fill();
+      diamond(ctx, W / 2 + ruleW / 2, m.ruleY, m.subSize * 0.2); ctx.fill();
+    }
 
     // strom — rozestup pokolení volíme tak, aby jména byla co největší
     var fit = fitPage(W, H, layout, dpi, M);
@@ -357,9 +382,14 @@
     // patička
     ctx.textAlign = 'center';
     ctx.fillStyle = pal.muted;
-    ctx.font = 'italic ' + Math.round(m.base * 0.018) + 'px ' + global.FG.View.serif;
-    ctx.fillText('❧  Kroniky rodů  ·  ' + new Date().toLocaleDateString('cs-CZ') + '  ❧',
-      W / 2, H - margin * 0.95);
+    var datum = new Date().toLocaleDateString('cs-CZ');
+    if (pal.plain) {
+      ctx.font = Math.round(m.base * 0.016) + 'px ' + global.FG.View.serif;
+      ctx.fillText('Kroniky rodů  ·  ' + datum, W / 2, H - margin * 0.95);
+    } else {
+      ctx.font = 'italic ' + Math.round(m.base * 0.018) + 'px ' + global.FG.View.serif;
+      ctx.fillText('❧  Kroniky rodů  ·  ' + datum + '  ❧', W / 2, H - margin * 0.95);
+    }
 
     var nameMM = 16 * s / dpi * 25.4;
     return {
@@ -384,10 +414,45 @@
     var V = global.FG.View;
     var idx = layout.index;
 
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    var cara = pal.plain ? 1.1 : 1.8;
+    ctx.lineCap = pal.plain ? 'butt' : 'round';
+    ctx.lineJoin = pal.plain ? 'miter' : 'round';
     ctx.strokeStyle = pal.link;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = cara;
+
+    function measure(text, font) {
+      ctx.font = font;
+      return ctx.measureText(text).width;
+    }
+
+    /* Na prostém listu nejsou rámečky, takže se čáry musí držet textu.
+       Předpočítáme si, kde jméno začíná, končí a v jaké výšce leží. */
+    var sazby = {};
+    if (pal.plain) {
+      layout.persons.forEach(function (n) {
+        var jm = (n.person.name && n.person.name.trim()) || 'Bez jména';
+        var sirka = M.NODE_W - 16;
+        var roky = settings.showYears ? S.lifespan(n.person) : '';
+        var sz = V.nameLayout(jm, sirka, measure);
+        var vic = sz.lines.length > 1;
+        var sirkyRadku = sz.lines.map(function (line) {
+          return measure(sz.clip ? fitText(ctx, line, sirka) : line,
+            '600 ' + sz.size + 'px ' + V.serif);
+        });
+        sazby[n.id] = {
+          sazba: sz, roky: roky, vic: vic, sirka: sirka,
+          // stejná výška pro všechna jména v řadě, ať roky mají nebo ne
+          zaklad: vic ? -10 : -2,
+          pul: Math.max.apply(null, sirkyRadku) / 2
+        };
+      });
+    }
+    /* svislý střed jména — tam vede spojnice k partnerovi */
+    function stredJmena(n) {
+      var z = sazby[n.id];
+      if (!z) return n.y;
+      return n.y + z.zaklad - z.sazba.size * 0.34 + (z.vic ? 8 : 0);
+    }
 
     layout.childLinks.forEach(function (link) {
       var u = layout.unionIndex[link.unionId];
@@ -444,8 +509,16 @@
         ctx.quadraticCurveTo(rx, top, rx, top + r);
         ctx.lineTo(rx, right.y - M.NODE_H / 2);
       } else if (Math.abs(a.y - b.y) < 1) {
-        ctx.moveTo(left.x + M.NODE_W / 2, left.y);
-        ctx.lineTo(right.x - M.NODE_W / 2, right.y);
+        if (pal.plain) {
+          var lz = sazby[left.id], rz = sazby[right.id];
+          var od = left.x + (lz ? lz.pul : M.NODE_W / 2) + 9;
+          var kam = right.x - (rz ? rz.pul : M.NODE_W / 2) - 9;
+          var vy = (stredJmena(left) + stredJmena(right)) / 2;
+          if (kam > od) { ctx.moveTo(od, vy); ctx.lineTo(kam, vy); }
+        } else {
+          ctx.moveTo(left.x + M.NODE_W / 2, left.y);
+          ctx.lineTo(right.x - M.NODE_W / 2, right.y);
+        }
       } else {
         ctx.setLineDash([6, 6]);
         ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
@@ -456,6 +529,23 @@
 
     // svazek — kosočtverec s obroučkou a obdobím trvání
     layout.unions.forEach(function (u) {
+      if (pal.plain) {
+        // prostý list značky nemá; jen u samostatného rodiče drobný bod,
+        // ať je poznat, že druhý rodič chybí
+        if (u.partners.length < 2 && u.children.length) {
+          ctx.fillStyle = pal.ink;
+          ctx.beginPath();
+          ctx.arc(u.ax, u.ay, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (u.partners.length >= 2 && u.years && settings.showYears) {
+          ctx.textAlign = 'left';
+          ctx.fillStyle = pal.muted;
+          ctx.font = 'italic 11px ' + V.serif;
+          ctx.fillText(u.years, u.ax + 7, u.ay - 5);
+        }
+        return;
+      }
       if (u.partners.length < 2) {
         // rodič bez partnera — prázdný kosočtverec tam, kde začíná větev
         if (!u.children.length) return;
@@ -465,7 +555,7 @@
         diamond(ctx, u.ax, u.ay, 6);
         ctx.fill(); ctx.stroke();
         ctx.strokeStyle = pal.link;
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = cara;
         return;
       }
       ctx.fillStyle = pal.accent;
@@ -482,17 +572,32 @@
         ctx.fillText(u.years, u.ax + 9, u.ay + 20);
       }
       ctx.strokeStyle = pal.link;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = cara;
     });
-
-    function measure(text, font) {
-      ctx.font = font;
-      return ctx.measureText(text).width;
-    }
 
     layout.persons.forEach(function (n) {
       var p = n.person;
       var isFocus = n.id === layout.focusId;
+
+      if (pal.plain) {
+        // Prostý list: žádná plaketa, jen jméno a pod ním roky —
+        // tak, jak se rodokmeny sázejí v dodatcích knih.
+        var z = sazby[n.id];
+        ctx.textAlign = 'center';
+        ctx.fillStyle = pal.ink;
+        z.sazba.lines.forEach(function (line, i) {
+          ctx.font = '600 ' + z.sazba.size + 'px ' + V.serif;
+          ctx.fillText(z.sazba.clip ? fitText(ctx, line, z.sirka) : line,
+            n.x, n.y + z.zaklad + i * 16);
+        });
+        if (z.roky) {
+          ctx.font = '12px ' + V.serif;
+          ctx.fillStyle = pal.muted;
+          ctx.fillText(fitText(ctx, z.roky, z.sirka),
+            n.x, n.y + z.zaklad + (z.vic ? 2 : 1) * 16 + 3);
+        }
+        return;
+      }
 
       // stín pod plaketou
       ctx.save();

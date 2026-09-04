@@ -1622,7 +1622,10 @@
           seg('Rozsah', 'scope', [
             { v: 'view', l: 'Aktuální výřez' }, { v: 'full', l: 'Celý strom' }
           ]),
-          seg('Vzhled', 'theme', [{ v: 'pergamen', l: 'Pergamen' }, { v: 'inkoust', l: 'Inkoust' }]),
+          seg('Vzhled', 'theme', [
+            { v: 'pergamen', l: 'Pergamen' }, { v: 'inkoust', l: 'Inkoust' },
+            { v: 'prosty', l: 'Prostý' }
+          ]),
           info,
           global.FG.Files.hosted()
             ? h('p', {
