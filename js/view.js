@@ -2,6 +2,8 @@
 (function (global) {
   'use strict';
 
+  var SNAP = 26;      // jak daleko od svislice se karta ještě přichytí
+
   var NS = 'http://www.w3.org/2000/svg';
   var M = null;
 
@@ -66,7 +68,7 @@
 
   var View = {
     svg: null, viewport: null, host: null,
-    gLinks: null, gNodes: null, gUnions: null,
+    gLinks: null, gNodes: null, gUnions: null, gGuide: null,
     t: { x: 0, y: 0, k: 1 },
     layout: null, tree: null,
     selectedId: null,
@@ -84,6 +86,7 @@
       this.gLinks = el('g', { class: 'links' }, this.viewport);
       this.gUnions = el('g', { class: 'unions' }, this.viewport);
       this.gNodes = el('g', { class: 'nodes' }, this.viewport);
+      this.gGuide = el('g', { class: 'guides' }, this.viewport);
       this.bindPointer();
       return this;
     },
@@ -229,10 +232,15 @@
           }
           if (drag.active) {
             moved = true;
-            drag.dx = tx / self.t.k;          // do souřadnic stromu
+            if (!drag.cile) drag.cile = self.snapCile(drag.id);
+            drag.volne = ev.altKey;            // s Alt se karta nepřichytává
+            var chce = tx / self.t.k;          // do souřadnic stromu
+            var snap = self.snapDx(drag, chce);
+            drag.dx = snap.dx;
             drag.el.setAttribute('transform', drag.base + ' translate(' + drag.dx + ',0)');
             // ať je vidět, že karta míří na jinou, ještě než ji pustíme
             drag.el.classList.toggle('collide', self.kolize(drag.id, drag.dx).length > 0);
+            self.guide(snap.x);
             return;                            // plátnem během tažení nehýbeme
           }
         }
@@ -276,6 +284,7 @@
        nemění, tu určuje pokolení. */
     endDrag: function (drag, commit) {
       if (!drag) return;
+      this.guide(null);
       this.svg.classList.remove('dragging-node');
       if (!drag.active) return;
       drag.el.classList.remove('dragging');
@@ -283,6 +292,83 @@
       drag.el.setAttribute('transform', drag.base);
       if (!commit) return;
       if (Math.abs(drag.dx) >= 1 && this.onDrag) this.onDrag(drag.id, drag.dx);
+    },
+
+    /* ---------- přichycení při tažení ----------
+
+       Kam se karta ráda přichytí: do svislice s jinou kartou, do stejného
+       rozestupu, jaký mají ostatní, doprostřed mezery nebo doprostřed pod
+       rodiče či nad vlastní potomky. Díky tomu strom drží rozestupy
+       i symetrii, aniž by se muselo mířit na pixel. */
+    snapCile: function (id) {
+      var L = this.layout, S = global.FG.Store;
+      var tree = S.activeTree();
+      var me = L && L.index[id];
+      var out = [], videno = {};
+      if (!me || !tree) return out;
+      var krok = M.NODE_W + M.SIB_GAP;
+      var par = M.NODE_W + M.PARTNER_GAP;
+      function add(x, rank) {
+        if (!isFinite(x)) return;
+        var k = Math.round(x);
+        if (videno[k] !== undefined && videno[k] <= rank) return;
+        videno[k] = rank;
+        out.push({ x: k, rank: rank });
+      }
+      // užší rozestup platí jen vedle skutečného partnera; jinak by si
+      // konkuroval s běžným rozestupem a karta by sedla o pár pixelů vedle
+      var partneri = {};
+      S.partnersOf(tree, id).forEach(function (pid) { partneri[pid] = true; });
+      var rada = [];
+      L.persons.forEach(function (n) {
+        if (n.id === id) return;
+        add(n.x, 0);                                 // stejná svislice
+        if (n.gen !== me.gen) return;
+        rada.push(n);
+        if (partneri[n.id]) { add(n.x - par, 1); add(n.x + par, 1); }
+        else { add(n.x - krok, 1); add(n.x + krok, 1); }
+      });
+      rada.sort(function (a, b) { return a.x - b.x; });
+      for (var i = 1; i < rada.length; i++) {
+        add((rada[i - 1].x + rada[i].x) / 2, 3);     // střed mezery
+      }
+      function stred(ids) {
+        var xs = (ids || []).map(function (p) { return L.index[p]; })
+          .filter(Boolean).map(function (n) { return n.x; });
+        if (!xs.length) return NaN;
+        return (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2;
+      }
+      add(stred(S.parentsOf(tree, id)), 0);          // uprostřed pod rodiči
+      add(stred(S.childrenOf(tree, id)), 0);         // uprostřed nad potomky
+      add(stred(S.partnersOf(tree, id)), 1);
+      return out;
+    },
+
+    /* nejbližší cíl přichycení; vrací posun a svislici, kterou ukázat */
+    snapDx: function (drag, dx) {
+      var L = this.layout, me = L && L.index[drag.id];
+      if (!me || !drag.cile || drag.volne) return { dx: dx, x: null };
+      var cil = me.x + dx, nej = null;
+      drag.cile.forEach(function (c) {
+        var d = Math.abs(c.x - cil);
+        if (d > SNAP) return;
+        if (!nej || d < nej.d - 1.5 || (d < nej.d + 1.5 && c.rank < nej.rank)) {
+          nej = { d: d, x: c.x, rank: c.rank };
+        }
+      });
+      if (!nej) return { dx: dx, x: null };
+      return { dx: nej.x - me.x, x: nej.x };
+    },
+
+    /* svislá čára, na kterou se karta právě chytá */
+    guide: function (x) {
+      if (!this.gGuide) return;
+      this.gGuide.textContent = '';
+      if (x === null || x === undefined || !this.layout) return;
+      var b = this.layout.bbox;
+      el('line', {
+        x1: x, y1: b.y1 - 70, x2: x, y2: b.y2 + 70, class: 'snap-guide'
+      }, this.gGuide);
     },
 
     /* koho by karta po posunu o dx překryla ve své řadě */
@@ -362,6 +448,7 @@
       this.gLinks.textContent = '';
       this.gUnions.textContent = '';
       this.gNodes.textContent = '';
+      if (this.gGuide) this.gGuide.textContent = '';
 
       var idx = layout.index;
 
