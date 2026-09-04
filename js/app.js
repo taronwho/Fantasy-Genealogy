@@ -7,6 +7,7 @@
   var currentLayout = null;
   var focusHistory = [];
   var pendingView = 'fit';
+  var skrytiCil = null;   // osoba stranou stromu, na kterou míří tlačítko
 
   /* primary = na mobilu zůstává ve spodní liště, ostatní jsou pod „Více" */
   var SECTIONS = [
@@ -479,6 +480,54 @@
 
     markRail('#rail-up', tree.view.up);
     markRail('#rail-down', tree.view.down);
+    updateSkryti(tree, total - shown);
+  }
+
+  /* Kdo se nekreslí, není poznat — a nastavení, které ho schovává, může
+     být na každém zařízení jiné. Tlačítko proto řekne kolik a proč,
+     a jedním klepnutím zobrazí celý rod. */
+  function updateSkryti(tree, kolik) {
+    var btn = q('#btn-skryti');
+    if (!btn) return;
+    if (kolik <= 0) { btn.hidden = true; skrytiCil = null; return; }
+    var set = S.state.settings;
+    var vetve = set.collateral !== 'all';
+    var pokoleni = tree.view.up !== Infinity || tree.view.down !== Infinity;
+    btn.hidden = false;
+    if (vetve || pokoleni) {
+      skrytiCil = null;
+      btn.textContent = kolik + ' skryt' + (kolik === 1 ? 'á' : kolik < 5 ? 'é' : 'ých');
+      var duvod = [];
+      if (vetve) {
+        duvod.push('vedlejší větve jsou omezené na „' +
+          (set.collateral === 'none' ? 'Jen přímou linii' : 'Se sourozenci') + '“');
+      }
+      if (pokoleni) duvod.push('je omezený počet pokolení');
+      btn.title = kolik + ' příbuzných se nekreslí, protože ' + duvod.join(' a ') +
+        '. Klepnutím zobrazíte celý rod.';
+      return;
+    }
+    // Nic je neschovává — prostě nemají vazbu na nikoho ve stromu.
+    var stranou = Object.keys(tree.people).filter(function (id) {
+      return !currentLayout.index[id];
+    });
+    skrytiCil = stranou[0] || null;
+    btn.textContent = kolik + ' bez vazby';
+    btn.title = 'Tyto osoby nemají vazbu na nikoho v rodokmenu, takže je není ' +
+      'kam nakreslit: ' + stranou.map(function (id) { return S.label(tree, id); }).join(', ') +
+      '. Klepnutím se na první z nich zaměříte.';
+  }
+
+  function onSkrytiClick() {
+    var tree = S.activeTree();
+    if (!tree) return;
+    if (skrytiCil) { setFocus(skrytiCil); return; }
+    S.state.settings.collateral = 'all';
+    tree.view.up = Infinity;
+    tree.view.down = Infinity;
+    pendingView = 'fit';
+    S.emit('settings');
+    UI.toast('Zobrazen celý rod');
   }
 
   function osob(n) {
@@ -530,6 +579,7 @@
       btn.addEventListener('click', function () { tool(btn.getAttribute('data-act')); });
     });
     q('#btn-trees').addEventListener('click', function () { UI.treeManager(); });
+    q('#btn-skryti').addEventListener('click', onSkrytiClick);
     var misto = q('#cloud-tool');
     if (misto) misto.appendChild(UI.cloudTlacitko({ tool: true }));
   }

@@ -392,7 +392,18 @@ body[data-theme="inkoust"] #stage { box-shadow: inset 0 0 240px rgba(0, 0, 0, .6
 .topbar {
   position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
   z-index: 5;
+  display: flex; align-items: center; gap: 8px;
 }
+/* kolik příbuzných se právě nekreslí — klepnutím se ukážou všichni */
+.hidden-btn {
+  flex: none; cursor: pointer;
+  background: var(--panel); color: var(--muted);
+  border: 1px solid var(--ink-soft); border-radius: 3px;
+  padding: 7px 12px; font-size: 11px; line-height: 1.2;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+.hidden-btn:hover { border-color: var(--accent); color: var(--ink); }
 .chip-btn {
   display: flex; align-items: center; gap: 11px;
   background: var(--panel); border: 1px solid var(--ink-soft);
@@ -766,7 +777,8 @@ textarea { resize: vertical; min-height: 60px; }
   /* plátno rodokmenu: lišty pokolení jdou vodorovně nad a pod strom,
      ať zbyde co nejvíc místa na samotné karty */
   .topbar { top: 8px; left: 8px; right: 8px; transform: none; }
-  .chip-btn { width: 100%; max-width: none; padding: 6px 12px; }
+  .chip-btn { flex: 1 1 auto; max-width: none; padding: 6px 12px; min-width: 0; }
+  .hidden-btn { padding: 6px 9px; }
   .chip-txt strong { font-size: 14px; }
 
   .rail-tl { top: 58px; left: 8px; right: 62px; }

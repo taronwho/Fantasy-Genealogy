@@ -51,10 +51,11 @@
     defaults: function () {
       return {
         version: 2,
+        settingsVersion: 1,
         activeWorldId: null,
         settings: {
           theme: prefersDark() ? 'inkoust' : 'pergamen',   // pergamen | inkoust
-          collateral: 'siblings',  // none | siblings | all
+          collateral: 'all',       // none | siblings | all
           showPartners: true,
           showYears: true,
           showNotes: true
@@ -93,6 +94,15 @@
         for (var k in data.settings) state.settings[k] = data.settings[k];
       }
       state.changedAt = data.changedAt || 0;
+      state.settingsVersion = data.settingsVersion || 0;
+      /* „Se sourozenci" bývalo výchozí a tiše schovávalo strýce, tety
+         i bratrance — na jednom zařízení tak strom vypadal jinak než na
+         druhém. Kdo si to nepřenastavil, dostane celý rod; zpět to jde
+         v Nastavení jedním klepnutím. */
+      if (!state.settingsVersion && state.settings.collateral === 'siblings') {
+        state.settings.collateral = 'all';
+      }
+      state.settingsVersion = 1;
       if (data.worlds) {
         state.worlds = data.worlds;
         state.worldOrder = data.worldOrder || Object.keys(data.worlds);
@@ -146,6 +156,7 @@
       state = state || this.state;
       var out = {
         version: 2,
+        settingsVersion: state.settingsVersion || 1,
         activeWorldId: state.activeWorldId,
         changedAt: state.changedAt || 0,   // kdy se naposledy něco změnilo
         settings: state.settings,
@@ -559,6 +570,19 @@
       return u.children.filter(function (id) {
         return id !== personId && tree.people[id];
       });
+    },
+
+    /* Sourozenci i nevlastní — kdo má s osobou společného aspoň jednoho
+       rodiče. Ve stromu patří k sobě: Imeline je dcerou Ciallach stejně
+       jako Härmas, jen s jiným otcem. */
+    allSiblingsOf: function (tree, personId) {
+      var out = this.siblingsOf(tree, personId);
+      this.parentsOf(tree, personId).forEach(function (rid) {
+        Store.childrenOf(tree, rid).forEach(function (cid) {
+          if (cid !== personId && out.indexOf(cid) === -1) out.push(cid);
+        });
+      });
+      return out;
     },
 
     /* ---------- ruční pořadí sourozenců ---------- */

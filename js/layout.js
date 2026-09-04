@@ -127,7 +127,7 @@
     // výchozí body pro potomky
     var seeds = [focusId];
     if (collateral === 'siblings') {
-      S.siblingsOf(tree, focusId).forEach(function (sid) {
+      S.allSiblingsOf(tree, focusId).forEach(function (sid) {
         if (see(sid, 0, 'sibling')) seeds.push(sid);
       });
     } else if (collateral === 'all') {
@@ -136,7 +136,7 @@
       var grow = seeds.slice();
       while (grow.length) {
         var a = grow.shift();
-        S.siblingsOf(tree, a).forEach(function (sid) {
+        S.allSiblingsOf(tree, a).forEach(function (sid) {
           if (see(sid, gen[a], 'collateral')) { seeds.push(sid); }
         });
       }
@@ -160,6 +160,36 @@
           see(pid, gen[id], 'partner');
         });
       });
+    }
+
+    /* „Celý rod" znamená opravdu celý: dokud přibývá někdo, kdo s viditelnou
+       osobou nějak souvisí, přidáváme dál. Bez toho chyběli třeba rodiče
+       partnerů — Öö je matkou Lilleline, a ta ve stromu stojí jen jako
+       Innukasova žena, takže se k Öö nikdo nedostal. */
+    if (collateral === 'all') {
+      var fronta = Object.keys(vis);
+      while (fronta.length) {
+        var x = fronta.shift();
+        var xg = gen[x];
+        if (-(xg - 1) <= up) {
+          S.parentsOf(tree, x).forEach(function (pid) {
+            if (see(pid, xg - 1, 'collateral')) fronta.push(pid);
+          });
+          S.allSiblingsOf(tree, x).forEach(function (sid) {
+            if (see(sid, xg, 'collateral')) fronta.push(sid);
+          });
+        }
+        if (xg + 1 <= down) {
+          S.childrenOf(tree, x).forEach(function (kid) {
+            if (see(kid, xg + 1, 'descendant')) fronta.push(kid);
+          });
+        }
+        if (showPartners) {
+          S.partnersOf(tree, x).forEach(function (pid) {
+            if (see(pid, xg, 'partner')) fronta.push(pid);
+          });
+        }
+      }
     }
 
     /* viditelné svazky */
