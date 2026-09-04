@@ -49,25 +49,25 @@
 
   function mm2px(mm, dpi) { return Math.round(mm / 25.4 * dpi); }
 
-  /* rozvržení stránky — plocha, která zbude na strom po nadpisu a patičce */
+  /* Rozvržení stránky — plocha, která zbude na strom pod nadpisem.
+     Kromě názvu rodu se na list netiskne žádný text, takže dole ani
+     pod nadpisem není co držet místem. */
   function pageMetrics(W, H) {
     var base = Math.min(W, H);
     var margin = Math.round(base * 0.055);
-    var footH = Math.round(base * 0.03);
     var titleSize = Math.round(base * 0.05);
     var subSize = Math.round(base * 0.023);
     var titleBase = margin + titleSize * 1.05;
-    var subBase = titleBase + subSize * 2.05;
-    var ruleY = subBase + subSize * 1.35;
-    var top = ruleY + subSize * 1.1;
+    var ruleY = titleBase + titleSize * 0.66;
+    var top = ruleY + subSize * 1.5;
     return {
-      base: base, margin: margin, footH: footH,
+      base: base, margin: margin,
       titleSize: titleSize, subSize: subSize,
-      titleBase: titleBase, subBase: subBase, ruleY: ruleY,
+      titleBase: titleBase, ruleY: ruleY,
       pad: Math.round(base * 0.012),
       x: margin, y: top,
       w: W - margin * 2,
-      h: H - top - footH - margin * 1.1
+      h: H - top - margin * 1.1
     };
   }
 
@@ -317,12 +317,7 @@
     var m = pageMetrics(W, H);
     var margin = m.margin;
 
-    var focus = tree.people[layout.focusId];
-    var genSpan = layout.maxGen - layout.minGen + 1;
-    var sub = focus ? 'rod postavy ' + ((focus.name || '').trim() || 'bez jména') : '';
-    sub += sub ? '  ·  ' : '';
-    sub += genSpan + ' pokolení  ·  ' + layout.persons.length + ' ' + czOsob(layout.persons.length);
-
+    // Na listu stojí jen jméno rodu — žádné počty, data ani popisky.
     if (pal.plain) {
       ctx.fillStyle = pal.bg;
       ctx.fillRect(0, 0, W, H);
@@ -330,9 +325,6 @@
       ctx.fillStyle = pal.ink;
       ctx.font = 'italic 600 ' + m.titleSize + 'px ' + global.FG.View.serif;
       ctx.fillText(fitText(ctx, tree.name || 'Rodokmen', W - margin * 2), W / 2, m.titleBase);
-      ctx.font = m.subSize + 'px ' + global.FG.View.serif;
-      ctx.fillStyle = pal.muted;
-      ctx.fillText(fitText(ctx, sub, W - margin * 2), W / 2, m.subBase);
     } else {
       paperTexture(ctx, W, H, pal);
       drawFrame(ctx, W, H, margin, pal);
@@ -345,10 +337,6 @@
       ctx.font = '600 ' + m.titleSize + 'px ' + global.FG.View.serif;
       ctx.fillText(fitText(ctx, title, W - margin * 3), W / 2, m.titleBase);
       if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-
-      ctx.font = 'italic ' + m.subSize + 'px ' + global.FG.View.serif;
-      ctx.fillStyle = pal.muted;
-      ctx.fillText(fitText(ctx, sub, W - margin * 3), W / 2, m.subBase);
 
       // ozdobná linka pod nadpisem
       var ruleW = Math.min(W - margin * 3, m.base * 0.62);
@@ -379,18 +367,6 @@
     drawTree(ctx, tree, drawn, settings, pal, M);
     ctx.restore();
 
-    // patička
-    ctx.textAlign = 'center';
-    ctx.fillStyle = pal.muted;
-    var datum = new Date().toLocaleDateString('cs-CZ');
-    if (pal.plain) {
-      ctx.font = Math.round(m.base * 0.016) + 'px ' + global.FG.View.serif;
-      ctx.fillText('Kroniky rodů  ·  ' + datum, W / 2, H - margin * 0.95);
-    } else {
-      ctx.font = 'italic ' + Math.round(m.base * 0.018) + 'px ' + global.FG.View.serif;
-      ctx.fillText('❧  Kroniky rodů  ·  ' + datum + '  ❧', W / 2, H - margin * 0.95);
-    }
-
     var nameMM = 16 * s / dpi * 25.4;
     return {
       canvas: canvas, orientation: orient, scale: s, nameMM: nameMM,
@@ -399,12 +375,6 @@
           'Pomůže menší počet pokolení, jiná orientace nebo formát A4.'
         : null
     };
-  }
-
-  function czOsob(n) {
-    if (n === 1) return 'osoba';
-    if (n >= 2 && n <= 4) return 'osoby';
-    return 'osob';
   }
 
   /* ---------------- strom ---------------- */
